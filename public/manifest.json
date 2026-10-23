@@ -1,0 +1,14 @@
+{
+  "name": "Маклер — рабочее место риэлтора",
+  "short_name": "Маклер",
+  "description": "Клиенты, объекты, показы, сделки и легализация в одном приложении.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#f5f5f5",
+  "lang": "ru",
+  "icons": [
+    { "src": "/apple-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

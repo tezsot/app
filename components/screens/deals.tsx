@@ -1,0 +1,249 @@
+'use client'
+
+import { ArrowRight, Building2, Check, Handshake, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { Avatar, Badge, Button, Group, Progress, Row, Screen, Segmented } from '@/components/ios/primitives'
+import { DEAL_STAGES, type Deal, type PayStatus, money, propertyTitle } from '@/lib/data'
+import { useStore } from '@/lib/store'
+import { cn } from '@/lib/utils'
+
+const PAY_LABEL: Record<PayStatus, string> = { expected: 'Ожидается', partial: 'Частично', paid: 'Получено' }
+const payKind = (s: PayStatus) => (s === 'paid' ? 'success' : s === 'partial' ? 'warning' : 'neutral') as 'success'
+
+function myShare(d: Deal) {
+  return (d.commission.amount * (d.commission.split.find((x) => x.name === 'Вы')?.share ?? 100)) / 100
+}
+
+export function DealsScreen() {
+  const s = useStore()
+  const [view, setView] = useState<'funnel' | 'money'>('funnel')
+  const client = (id: string) => s.clients.find((c) => c.id === id)!
+  const property = (id: string) => s.properties.find((p) => p.id === id)!
+
+  const expected = s.deals.reduce((sum, d) => sum + (myShare(d) - (d.commission.received * myShare(d)) / d.commission.amount), 0)
+  const received = s.deals.reduce((sum, d) => sum + (d.commission.received * myShare(d)) / d.commission.amount, 0)
+
+  return (
+    <Screen title="Сделки">
+      <div className="px-4 pb-4">
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'funnel', label: 'Воронка' },
+            { value: 'money', label: 'Комиссии' },
+          ]}
+        />
+      </div>
+
+      {view === 'funnel' ? (
+        <>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-5">
+            {DEAL_STAGES.map((st, i) => {
+              const n = s.deals.filter((d) => d.stage === i).length
+              return (
+                <div
+                  key={st}
+                  className={cn(
+                    'flex min-w-[92px] shrink-0 flex-col rounded-[18px] px-3 py-2.5',
+                    n ? 'bg-card' : 'bg-card/50 text-muted-foreground',
+                  )}
+                >
+                  <span className="text-[22px] font-bold tabular-nums">{n}</span>
+                  <span className="text-[12px]">{st}</span>
+                </div>
+              )
+            })}
+          </div>
+          {DEAL_STAGES.map((st, i) => {
+            const list = s.deals.filter((d) => d.stage === i)
+            if (!list.length) return null
+            return (
+              <Group key={st} header={st}>
+                {list.map((d) => (
+                  <Row
+                    key={d.id}
+                    leading={<Avatar name={client(d.clientId).name} size={40} />}
+                    title={<span className="font-medium">{client(d.clientId).name}</span>}
+                    subtitle={
+                      <>
+                        <span className="block truncate">
+                          {propertyTitle(property(d.propertyId))} · {money(property(d.propertyId).price)}
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-1 text-foreground">
+                          <ArrowRight className="size-3.5" aria-hidden />
+                          <span className="truncate">{d.next}</span>
+                        </span>
+                      </>
+                    }
+                    onClick={() => s.push({ name: 'deal', id: d.id })}
+                  />
+                ))}
+              </Group>
+            )
+          })}
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-2 px-4 pb-6">
+            <div className="rounded-[22px] bg-primary p-4 text-primary-foreground">
+              <p className="text-[13px] opacity-70">Ожидается</p>
+              <p className="mt-1 text-[26px] font-bold tabular-nums">{money(Math.round(expected))}</p>
+            </div>
+            <div className="rounded-[22px] bg-card p-4">
+              <p className="text-[13px] text-muted-foreground">Получено</p>
+              <p className="mt-1 text-[26px] font-bold tabular-nums">{money(Math.round(received))}</p>
+            </div>
+          </div>
+          <Group header="По сделкам" footer="Суммы указаны с учётом вашей доли при разделе">
+            {s.deals.map((d) => (
+              <Row
+                key={d.id}
+                icon={Wallet}
+                tone={d.commission.status === 'partial' ? 'warning' : 'neutral'}
+                title={client(d.clientId).name}
+                subtitle={
+                  <span className="flex items-center gap-1.5">
+                    <Badge kind={payKind(d.commission.status)}>{PAY_LABEL[d.commission.status]}</Badge>
+                    <span>до {d.commission.due}</span>
+                  </span>
+                }
+                value={money(Math.round(myShare(d)))}
+                onClick={() => s.push({ name: 'deal', id: d.id })}
+              />
+            ))}
+          </Group>
+        </>
+      )}
+    </Screen>
+  )
+}
+
+export function DealDetail({ id }: { id: string }) {
+  const s = useStore()
+  const d = s.deals.find((x) => x.id === id)
+  if (!d) return null
+  const c = s.clients.find((x) => x.id === d.clientId)!
+  const p = s.properties.find((x) => x.id === d.propertyId)!
+  const left = d.commission.amount - d.commission.received
+
+  const advance = () => {
+    if (d.stage >= DEAL_STAGES.length - 1) return
+    const prev = d
+    s.updateDeal(d.id, (x) => ({
+      ...x,
+      stage: x.stage + 1,
+      history: [{ id: `e${Date.now()}`, label: `Этап → ${DEAL_STAGES[x.stage + 1]}`, when: 'только что' }, ...x.history],
+    }))
+    s.notify(`Этап: ${DEAL_STAGES[d.stage + 1]}`, () => s.updateDeal(d.id, prev))
+  }
+
+  return (
+    <Screen title="Сделка" back onBack={s.pop} largeTitle={false}>
+      <div className="px-5 pb-5">
+        <p className="text-[13px] font-medium text-muted-foreground">
+          {d.type === 'sale' ? 'Продажа' : 'Аренда'} · {money(p.price, p.op)}
+        </p>
+        <h1 className="text-[28px] leading-tight font-bold">{c.name}</h1>
+        <p className="text-[15px] text-muted-foreground">{propertyTitle(p)}, {p.district}</p>
+      </div>
+
+      <section aria-label="Этап сделки" className="px-4 pb-6">
+        <div className="rounded-[22px] bg-card p-4">
+          <ol className="flex items-center">
+            {DEAL_STAGES.map((st, i) => (
+              <li key={st} className="flex flex-1 items-center last:flex-none">
+                <span
+                  aria-label={`${st}${i === d.stage ? ' — текущий' : ''}`}
+                  className={cn(
+                    'flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
+                    i < d.stage && 'bg-primary text-primary-foreground',
+                    i === d.stage && 'bg-primary text-primary-foreground ring-4 ring-primary/15',
+                    i > d.stage && 'bg-secondary text-muted-foreground',
+                  )}
+                >
+                  {i < d.stage ? <Check className="size-3.5" strokeWidth={3} aria-hidden /> : i + 1}
+                </span>
+                {i < DEAL_STAGES.length - 1 && (
+                  <span className={cn('mx-1 h-0.5 flex-1 rounded-full', i < d.stage ? 'bg-primary' : 'bg-secondary')} />
+                )}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-[13px] text-muted-foreground">Текущий этап</p>
+          <p className="text-[20px] font-semibold">{DEAL_STAGES[d.stage]}</p>
+          <div className="mt-3 rounded-[14px] bg-secondary px-3 py-2.5">
+            <p className="text-[12px] text-muted-foreground">Следующий шаг</p>
+            <p className="text-[15px] font-medium">{d.next}</p>
+          </div>
+          {d.stage < DEAL_STAGES.length - 1 && (
+            <Button className="mt-3 w-full" onClick={advance}>
+              Перевести: {DEAL_STAGES[d.stage + 1]}
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <Group header="Комиссия">
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[28px] font-bold tabular-nums">{money(d.commission.amount)}</p>
+            <Badge kind={payKind(d.commission.status)}>{PAY_LABEL[d.commission.status]}</Badge>
+          </div>
+          <Progress value={(d.commission.received / d.commission.amount) * 100} className="mt-3" />
+          <p className="mt-2 text-[13px] text-muted-foreground tabular-nums">
+            Получено {money(d.commission.received)}
+            {left > 0 && ` · осталось ${money(left)}`}
+          </p>
+        </div>
+        <Row title="Кто платит" value={d.commission.payer} />
+        <Row title="Срок" value={d.commission.due} />
+        {d.commission.split.map((x) => (
+          <Row
+            key={x.name}
+            title={x.name}
+            value={`${x.share}% · ${money(Math.round((d.commission.amount * x.share) / 100))}`}
+          />
+        ))}
+        {left > 0 && (
+          <div className="p-3">
+            <Button variant="secondary" className="w-full" icon={Wallet} onClick={() => s.openSheet({ type: 'payment', dealId: d.id })}>
+              Отметить оплату
+            </Button>
+          </div>
+        )}
+      </Group>
+
+      <Group header="Участники">
+        <Row
+          leading={<Avatar name={c.name} size={30} />}
+          title={c.name}
+          subtitle="Клиент"
+          onClick={() => s.push({ name: 'client', id: c.id })}
+        />
+        <Row
+          icon={Building2}
+          title={propertyTitle(p)}
+          subtitle={`Объект · ${p.district}`}
+          onClick={() => s.push({ name: 'property', id: p.id })}
+        />
+      </Group>
+
+      <Group header="История">
+        {d.history.map((h) => (
+          <Row key={h.id} icon={Handshake} title={h.label} value={h.when} />
+        ))}
+      </Group>
+      <div className="px-8">
+        <p className="flex items-start gap-2 text-[12px] leading-snug text-muted-foreground">
+          <IconTileMini />
+          Договорённости по комиссии сохраняются в истории и не удаляются.
+        </p>
+      </div>
+    </Screen>
+  )
+}
+
+function IconTileMini() {
+  return <span className="mt-1 size-1.5 shrink-0 rounded-full bg-muted-foreground/50" aria-hidden />
+}
