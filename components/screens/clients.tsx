@@ -260,6 +260,7 @@ export function ClientDetail({ id }: { id: string }) {
         )}
       </section>
 
+      <div className="px-4 pb-4"><Button onClick={() => s.openSheet({ type: 'addClient', clientId: c.id })}>Редактировать клиента и запрос</Button></div>
       <Group header="Запрос">
         <Row title="Цель" value={`${c.intent === 'buy' ? 'Покупка' : 'Аренда'} · ${c.kind}`} />
         <Row title="Бюджет" value={budgetLabel(c)} />

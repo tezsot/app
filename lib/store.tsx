@@ -34,7 +34,7 @@ export type Route =
 export type Sheet =
   | { type: 'add' }
   | { type: 'search' }
-  | { type: 'addClient' }
+  | { type: 'addClient'; clientId?: string }
   | { type: 'addProperty'; propertyId?: string }
   | { type: 'addTask'; clientId?: string; propertyId?: string }
   | { type: 'addShowing'; clientId?: string; propertyId?: string }

@@ -142,44 +142,47 @@ const BUDGETS: Record<Intent, { label: string; min: number; max: number }[]> = {
   ],
 }
 
-function AddClient({ depth }: SheetProps<'addClient'>) {
+function AddClient({ depth, clientId }: SheetProps<'addClient'>) {
   const s = useStore()
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('+998 ')
-  const [intent, setIntent] = useState<Intent>('buy')
+  const existing = s.clients.find((c) => c.id === clientId)
+  const [name, setName] = useState(existing?.name ?? '')
+  const [phone, setPhone] = useState(existing?.phone ?? '+998 ')
+  const [intent, setIntent] = useState<Intent>(existing?.intent ?? 'buy')
   const [budget, setBudget] = useState<number | null>(null)
-  const [district, setDistrict] = useState<string | null>(null)
-  const [more, setMore] = useState(false)
-  const valid = name.trim().length > 1 && phone.replace(/\D/g, '').length >= 9
+  const [min, setMin] = useState(existing?.budgetMin?.toString() ?? '')
+  const [max, setMax] = useState(existing?.budgetMax?.toString() ?? '')
+  const [kind, setKind] = useState(existing?.kind ?? 'Квартира')
+  const [rooms, setRooms] = useState(existing?.rooms?.toString() ?? '')
+  const [note, setNote] = useState(existing?.note ?? '')
+  const [district, setDistrict] = useState<string | null>(existing?.district ?? null)
+  const [more, setMore] = useState(!!existing)
+  const digits = phone.replace(/\D/g, '')
+  const duplicate = s.clients.some((c) => c.id !== clientId && c.phone.replace(/\D/g, '') === digits)
+  const budgetValid = [min, max].every((v) => !v || (Number.isFinite(Number(v)) && Number(v) >= 0)) && (!min || !max || Number(min) <= Number(max))
+  const roomsValid = !rooms || (Number.isInteger(Number(rooms)) && Number(rooms) > 0 && Number(rooms) <= 100)
+  const valid = name.trim().length > 1 && digits.length >= 9 && digits.length <= 15 && !duplicate && budgetValid && roomsValid
 
   const save = () => {
     if (!valid) return
-    const b = budget !== null ? BUDGETS[intent][budget] : undefined
-    const id = newId('c')
-    s.setClients((cs) => [
-      {
-        id,
-        name: name.trim(),
-        phone: phone.trim(),
-        intent,
-        kind: 'Квартира',
-        budgetMin: b?.min,
-        budgetMax: b?.max,
-        district: district ?? undefined,
-        status: 'new',
-        source: 'Вручную',
-        history: [{ id: newId('h'), label: 'Клиент создан', when: 'только что' }],
-      },
-      ...cs,
-    ])
-    s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, dueAt: relativeDate(0) })
+    if (clientId && !existing) return
+    const id = existing?.id ?? newId('c')
+    const updated = {
+      ...existing, id, name: name.trim(), phone: phone.trim(), intent, kind,
+      budgetMin: min ? Number(min) : undefined, budgetMax: max ? Number(max) : undefined,
+      district: district ?? undefined, rooms: rooms ? Number(rooms) : undefined,
+      note: note.trim() || undefined, status: existing?.status ?? 'new' as const,
+      source: existing?.source ?? 'Вручную',
+      history: [{ id: newId('h'), label: existing ? 'Контакты и запрос обновлены' : 'Клиент создан', when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...(existing?.history ?? [])],
+    }
+    s.setClients((cs) => existing ? cs.map((c) => c.id === id ? updated : c) : [updated, ...cs])
+    if (!existing) s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, dueAt: relativeDate(0) })
     s.closeSheet()
-    s.push({ name: 'client', id })
-    s.notify('Клиент добавлен, задача на звонок создана')
+    if (!existing) s.push({ name: 'client', id })
+    s.notify(existing ? 'Клиент обновлён, подбор объектов пересчитан' : 'Клиент добавлен, задача на звонок создана')
   }
 
   return (
-    <SheetFrame title="Новый клиент" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} depth={depth}>
+    <SheetFrame title={existing ? 'Редактировать клиента' : 'Новый клиент'} onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
         <Field label="Имя">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Например, Азиз" autoFocus />
@@ -187,12 +190,16 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Field label="Телефон">
           <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" type="tel" />
         </Field>
+        {duplicate && <p role="alert" className="text-[13px] text-destructive">Клиент с этим телефоном уже существует.</p>}
+        <Field label="Тип недвижимости"><ChoiceRow>{PROPERTY_KINDS.map((value) => <Chip key={value} active={kind === value} onClick={() => setKind(value)}>{value}</Chip>)}</ChoiceRow></Field>
         <Field label="Цель">
           <Segmented
             value={intent}
             onChange={(v) => {
               setIntent(v)
               setBudget(null)
+              setMin('')
+              setMax('')
             }}
             options={[
               { value: 'buy', label: 'Покупка' },
@@ -203,21 +210,31 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Field label="Бюджет">
           <ChoiceRow>
             {BUDGETS[intent].map((b, i) => (
-              <Chip key={b.label} active={budget === i} onClick={() => setBudget(budget === i ? null : i)}>
+              <Chip key={b.label} active={budget === i} onClick={() => { setBudget(budget === i ? null : i); setMin(budget === i ? '' : String(b.min ?? '')); setMax(budget === i ? '' : String(b.max ?? '')) }}>
                 {b.label}
               </Chip>
             ))}
           </ChoiceRow>
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={intent === 'rent' ? 'От, $/мес' : 'От, $'}><TextInput aria-label="Минимальный бюджет" value={min} inputMode="decimal" onChange={(e) => { setMin(e.target.value); setBudget(null) }} /></Field>
+          <Field label={intent === 'rent' ? 'До, $/мес' : 'До, $'}><TextInput aria-label="Максимальный бюджет" value={max} inputMode="decimal" onChange={(e) => { setMax(e.target.value); setBudget(null) }} /></Field>
+        </div>
+        {!budgetValid && <p role="alert" className="text-[13px] text-destructive">Укажите неотрицательный бюджет: «от» не больше «до».</p>}
         <button
           type="button"
           onClick={() => setMore((v) => !v)}
           aria-expanded={more}
           className="flex h-11 items-center gap-1 self-start px-4 text-[15px] font-medium"
         >
-          Район и детали
+          Район, комнаты и пожелания
           <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} aria-hidden />
         </button>
+        {more && <>
+          <Field label="Комнаты"><TextInput aria-label="Количество комнат" value={rooms} inputMode="numeric" onChange={(e) => setRooms(e.target.value)} placeholder="Неважно" /></Field>
+          {!roomsValid && <p role="alert" className="text-[13px] text-destructive">Количество комнат — целое число от 1 до 100.</p>}
+          <Field label="Пожелания"><TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ремонт, мебель, метро…" /></Field>
+        </>}
         {more && (
           <Field label="Район">
             <ChoiceRow>
@@ -232,7 +249,7 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Button size="lg" disabled={!valid} onClick={save} className="mt-2">
           Сохранить
         </Button>
-        <p className="-mt-2 text-center text-[12px] text-muted-foreground">Остальное можно дополнить позже</p>
+        <p className="-mt-2 text-center text-[12px] text-muted-foreground">{existing ? 'История, задачи и показы сохранятся' : 'После сохранения создадим задачу на первый звонок'}</p>
       </div>
     </SheetFrame>
   )
