@@ -1,5 +1,7 @@
 'use client'
 
+import { clientNext } from '@/lib/client-next'
+
 import {
   Building2,
   CalendarClock,
@@ -86,6 +88,15 @@ export function HomeScreen() {
         onOpen: () => s.push({ name: 'deal', id: d.id }),
       })
     })
+
+  s.clients.filter(c => c.status !== 'closed' && !clientNext(c.id, s.tasks, s.showings, s.now)).forEach(c => {
+    attention.push({
+      id: `next-${c.id}`, icon: CalendarClock, tone: 'warning',
+      title: `${c.name}: нет следующего шага`, reason: 'Назначьте контакт, чтобы не потерять клиента', action: 'Назначить',
+      onAction: () => s.openSheet({ type: 'addTask', clientId: c.id }),
+      onOpen: () => s.push({ name: 'client', id: c.id }),
+    })
+  })
 
   const today = [
     ...s.tasks

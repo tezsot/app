@@ -38,6 +38,7 @@ import {
   propertyTitle,
 } from '@/lib/data'
 import { useStore } from '@/lib/store'
+import { clientNext } from '@/lib/client-next'
 import { cn } from '@/lib/utils'
 
 type View = 'all' | 'contact' | 'active' | 'nonext' | 'closed'
@@ -53,7 +54,8 @@ export function ClientsScreen() {
   const [view, setView] = useState<View>('all')
   const [q, setQ] = useState('')
 
-  const nextFor = (id: string) => s.tasks.find((t) => t.clientId === id && !t.done)
+  const nextFor = (id: string) => clientNext(id, s.tasks, s.showings, s.now)
+  const needsContact = (c: Client) => c.status !== 'closed' && (c.status === 'contact' || c.status === 'new' || nextFor(c.id)?.bucket === 'overdue')
   const priority = (c: Client) => {
     const t = nextFor(c.id)
     if (c.status === 'closed') return 9
@@ -65,7 +67,7 @@ export function ClientsScreen() {
 
   const filtered = s.clients
     .filter((c) => {
-      if (view === 'contact') return c.status === 'contact' || c.status === 'new' || nextFor(c.id)?.bucket === 'overdue'
+      if (view === 'contact') return needsContact(c)
       if (view === 'active') return c.status === 'active'
       if (view === 'nonext') return c.status !== 'closed' && !nextFor(c.id)
       if (view === 'closed') return c.status === 'closed'
@@ -75,7 +77,7 @@ export function ClientsScreen() {
     .sort((a, b) => priority(a) - priority(b))
 
   const counts = {
-    contact: s.clients.filter((c) => c.status === 'contact' || c.status === 'new').length,
+    contact: s.clients.filter(needsContact).length,
     nonext: s.clients.filter((c) => c.status !== 'closed' && !nextFor(c.id)).length,
   }
 
@@ -171,7 +173,7 @@ export function ClientDetail({ id }: { id: string }) {
   const s = useStore()
   const c = s.clients.find((x) => x.id === id)
   if (!c) return null
-  const next = s.tasks.find((t) => t.clientId === c.id && !t.done)
+  const next = clientNext(c.id, s.tasks, s.showings, s.now)
   const matches = s.properties
     .map((p) => ({ p, score: matchScore(c, p) }))
     .filter((m) => m.score > 0)
@@ -238,13 +240,13 @@ export function ClientDetail({ id }: { id: string }) {
               <Button
                 size="sm"
                 icon={Phone}
-                onClick={() => s.openSheet({ type: 'call', clientId: c.id, taskId: next.id })}
+                onClick={() => next.source === 'showing' ? s.push({ name: 'showings' }) : next.kind === 'call' ? s.openSheet({ type: 'call', clientId: c.id, taskId: next.id }) : s.push({ name: 'tasks', taskId: next.id })}
               >
-                Позвонить
+                {next.source === 'showing' ? 'К показам' : next.kind === 'call' ? 'Позвонить' : 'Открыть задачу'}
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => s.completeTask(next.id)}>
+              {next.source === 'task' && <Button size="sm" variant="secondary" onClick={() => s.completeTask(next.id)}>
                 Выполнено
-              </Button>
+              </Button>}
             </div>
           </div>
         ) : (
