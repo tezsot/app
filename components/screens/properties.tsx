@@ -91,8 +91,31 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
   )
 }
 
+function PropertyListItem({ p, onOpen }: { p: Property; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="press flex w-full items-center gap-3 rounded-[20px] bg-card p-3 text-left focus-visible:outline-2 focus-visible:outline-primary">
+      <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-secondary">
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image} alt="" loading="lazy" className="size-full object-cover" />
+        ) : <Building2 className="size-7 text-muted-foreground" aria-hidden />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[17px] font-bold tabular-nums">{money(p.price, p.op)}</p>
+        <p className="truncate text-[14px]">{propertyTitle(p)}{p.area && p.kind === 'Квартира' ? ` · ${p.area} м²` : ''}</p>
+        <p className="truncate text-[12px] text-muted-foreground">{p.district} · {p.address}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">{p.op === 'sale' ? 'Продажа' : 'Аренда'}</span>
+          <Badge kind={freshnessKind(p.freshness)}>{FRESHNESS_LABEL[p.freshness]}</Badge>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function PropertiesScreen() {
   const s = useStore()
+  const [view, setView] = useState<'cards' | 'list'>('cards')
   const [op, setOp] = useState<'all' | 'sale' | 'rent'>('all')
   const [state, setState] = useState<'all' | 'recheck' | 'active' | 'archive'>('all')
 
@@ -136,6 +159,16 @@ export function PropertiesScreen() {
           Продано и архив
         </Chip>
       </ChipScroller>
+      <div className="flex items-center justify-between gap-3 px-4 pb-3">
+        <span className="text-[13px] text-muted-foreground">Найдено: {list.length}</span>
+        <div className="flex rounded-full bg-secondary p-1" role="group" aria-label="Вид объектов">
+          {([{ value: 'cards', label: 'Карточки' }, { value: 'list', label: 'Список' }] as const).map((option) => (
+            <button key={option.value} type="button" aria-pressed={view === option.value} onClick={() => setView(option.value)} className={cn('min-h-10 rounded-full px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary', view === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {list.length === 0 ? (
         <Empty
           icon={Building2}
@@ -150,7 +183,11 @@ export function PropertiesScreen() {
       ) : (
         <div className="flex flex-col gap-3 px-4">
           {list.map((p) => (
-            <PropertyCard key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+            view === 'cards' ? (
+              <PropertyCard key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+            ) : (
+              <PropertyListItem key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+            )
           ))}
         </div>
       )}
