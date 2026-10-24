@@ -1,6 +1,7 @@
 'use client'
 
 import { AddDeal } from '@/components/add-deal'
+import { parsePayment, applyPayment } from '@/lib/payments'
 
 import { relativeDate } from '@/lib/dates'
 
@@ -821,31 +822,35 @@ function ListingSheet({ depth, propertyId }: SheetProps<'listing'>) {
 function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
   const s = useStore()
   const d = s.deals.find((x) => x.id === dealId)!
-  const left = d.commission.amount - d.commission.received
+  const left = (Math.round(d.commission.amount * 100) - Math.round(d.commission.received * 100)) / 100
   const [value, setValue] = useState(String(left))
-  const n = Math.min(Number(value.replace(/\D/g, '')) || 0, left)
+  const cents = parsePayment(value)
+  const n = cents === null ? 0 : cents / 100
+  const valid = cents !== null && cents <= Math.round(left * 100)
   const save = () => {
-    const prev = d
-    const received = d.commission.received + n
+    if (!valid || cents === null) return
     s.updateDeal(d.id, (x) => ({
       ...x,
-      commission: { ...x.commission, received, status: received >= x.commission.amount ? 'paid' : 'partial' },
-      history: [{ id: newId('e'), label: `Получено ${money(n)}`, when: 'только что' }, ...x.history],
+      commission: { ...x.commission, ...applyPayment(x.commission.amount, x.commission.received, cents) },
+      history: [{ id: newId('e'), label: `Получено ${money(n)}`, when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...x.history],
     }))
     s.closeSheet()
-    s.notify(`Оплата ${money(n)} отмечена`, () => s.updateDeal(d.id, prev))
+    s.notify(`Оплата ${money(n)} отмечена`)
   }
   return (
-    <SheetFrame title="Оплата комиссии" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!n} detent="auto" depth={depth}>
+    <SheetFrame title="Оплата комиссии" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} detent="auto" depth={depth}>
       <div className="flex flex-col gap-4 px-4 pt-2">
         <TextInput
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          inputMode="numeric"
+          inputMode="decimal"
           autoFocus
-          aria-label="Сумма"
+          aria-label="Сумма в USD"
+          aria-invalid={!valid}
+          aria-describedby="payment-help"
           className="h-16 text-center text-[32px] font-bold tabular-nums"
         />
+        <p id="payment-help" role={!valid ? 'alert' : undefined} className="text-center text-[13px] text-muted-foreground">{valid ? 'USD · запишите только фактически полученную сумму' : 'Введите сумму больше нуля, не выше остатка, максимум два знака после запятой'}</p>
         <div className="flex justify-center gap-2">
           <Chip active={n === left} onClick={() => setValue(String(left))}>
             Весь остаток
