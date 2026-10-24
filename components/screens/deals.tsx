@@ -24,7 +24,7 @@ export function DealsScreen() {
   const received = s.deals.reduce((sum, d) => sum + (d.commission.received * myShare(d)) / d.commission.amount, 0)
 
   return (
-    <Screen title="Сделки">
+    <Screen title="Сделки" actions={<Button size="sm" onClick={() => s.openSheet({ type: 'addDeal' })}>Создать</Button>}>
       <div className="px-4 pb-4">
         <Segmented
           value={view}

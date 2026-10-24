@@ -1,5 +1,7 @@
 'use client'
 
+import { AddDeal } from '@/components/add-deal'
+
 import { relativeDate } from '@/lib/dates'
 
 import {
@@ -671,6 +673,7 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
     })
     s.closeSheet()
     s.notify('Итог сохранён, следующий шаг создан')
+    if (result === 'Понравилось') s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
   }
   return (
     <SheetFrame title="Итог показа" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
@@ -873,6 +876,8 @@ export function SheetHost() {
             return <AddMenu key={key} {...sheet} depth={i} />
           case 'search':
             return <SearchSheet key={key} {...sheet} depth={i} />
+          case 'addDeal':
+            return <AddDeal key={key} {...sheet} depth={i} />
           case 'addClient':
             return <AddClient key={key} {...sheet} depth={i} />
           case 'addProperty':
