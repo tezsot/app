@@ -120,11 +120,13 @@ export function PropertiesScreen() {
   const s = useStore()
   const [view, setView] = useState<'cards' | 'list'>('cards')
   const [op, setOp] = useState<'all' | 'sale' | 'rent'>('all')
-  const [state, setState] = useState<'all' | 'recheck' | 'active' | 'archive'>('all')
+  const [state, setState] = useState<'all' | 'recheck' | 'active' | 'archive' | 'draft'>('all')
 
   const list = s.properties
     .filter((p) => op === 'all' || p.op === op)
     .filter((p) => {
+      if (state === 'draft') return !!p.draft
+      if (p.draft) return false
       if (state === 'recheck') return p.freshness === 'recheck'
       if (state === 'active') return p.freshness === 'confirmed' || p.freshness === 'new'
       if (state === 'archive') return p.freshness === 'sold' || p.freshness === 'archived'
@@ -161,6 +163,7 @@ export function PropertiesScreen() {
         <Chip active={state === 'archive'} onClick={() => setState('archive')}>
           Продано и архив
         </Chip>
+        <Chip active={state === 'draft'} onClick={() => setState('draft')} count={s.properties.filter((p) => p.draft).length}>Черновики</Chip>
       </ChipScroller>
       <div className="flex items-center justify-between gap-3 px-4 pb-3">
         <span className="text-[13px] text-muted-foreground">Найдено: {list.length}</span>
@@ -187,9 +190,9 @@ export function PropertiesScreen() {
         <div className="flex flex-col gap-3 px-4">
           {list.map((p) => (
             view === 'cards' ? (
-              <PropertyCard key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+              <PropertyCard key={p.id} p={p} onOpen={() => p.draft ? s.openSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })} />
             ) : (
-              <PropertyListItem key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+              <PropertyListItem key={p.id} p={p} onOpen={() => p.draft ? s.openSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })} />
             )
           ))}
         </div>
@@ -307,6 +310,7 @@ export function PropertyDetail({ id }: { id: string }) {
 
       <PropertyActivity propertyId={p.id} active={active} />
 
+      <div className="px-4 pb-4"><Button onClick={() => s.openSheet({ type: 'addProperty', propertyId: p.id })}>Редактировать объект</Button></div>
       <Group header="Характеристики">
         {p.op === 'sale' && !!p.area && p.area > 0 && <Row title="Цена за м²" value={`${money(Math.round(p.price / p.area))} / м²`} />}
         <Row title="Тип" value={p.kind} />

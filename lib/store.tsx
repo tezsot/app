@@ -35,7 +35,7 @@ export type Sheet =
   | { type: 'add' }
   | { type: 'search' }
   | { type: 'addClient' }
-  | { type: 'addProperty' }
+  | { type: 'addProperty'; propertyId?: string }
   | { type: 'addTask'; clientId?: string; propertyId?: string }
   | { type: 'addShowing'; clientId?: string; propertyId?: string }
   | { type: 'call'; clientId: string; taskId?: string }

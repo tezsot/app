@@ -238,44 +238,43 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
   )
 }
 
-function AddProperty({ depth }: SheetProps<'addProperty'>) {
+function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
   const s = useStore()
-  const [op, setOp] = useState<'sale' | 'rent'>('sale')
-  const [kind, setKind] = useState<Property['kind']>('Квартира')
-  const [district, setDistrict] = useState<string | null>(null)
-  const [rooms, setRooms] = useState<number | null>(null)
-  const [price, setPrice] = useState('')
-  const [owner, setOwner] = useState('')
-  const valid = !!district && Number(price.replace(/\D/g, '')) > 0
+  const existing = s.properties.find((p) => p.id === propertyId)
+  const [op, setOp] = useState<'sale' | 'rent'>(existing?.op ?? 'sale')
+  const [kind, setKind] = useState<Property['kind']>(existing?.kind ?? 'Квартира')
+  const [district, setDistrict] = useState<string | null>(existing?.district ?? null)
+  const [rooms, setRooms] = useState<number | null>(existing?.rooms ?? null)
+  const [price, setPrice] = useState(existing ? String(existing.price) : '')
+  const [owner, setOwner] = useState(existing?.owner ?? '')
+  const [address, setAddress] = useState(existing?.address ?? '')
+  const [area, setArea] = useState(existing?.area ? String(existing.area) : '')
+  const amount = Number(price.replace(/\s/g, ''))
+  const areaValue = Number(area.replace(',', '.'))
+  const numericValid = Number.isFinite(amount) && amount >= 0 && (!area || (Number.isFinite(areaValue) && areaValue > 0))
+  const valid = !!district && numericValid && amount > 0
 
   const save = (draft = false) => {
-    if (!draft && !valid) return
-    const id = newId('p')
-    s.setProperties((ps) => [
-      {
-        id,
-        op,
-        kind,
-        district: district ?? 'Не указан',
-        address: 'Адрес уточняется',
-        price: Number(price.replace(/\D/g, '')) || 0,
-        rooms: rooms ?? undefined,
-        freshness: 'new',
-        checked: 'только что',
-        owner: owner || 'Не указан',
-        priceHistory: [{ label: 'окт', price: Number(price.replace(/\D/g, '')) || 0 }],
-        docs: [],
-        draft,
-      },
-      ...ps,
-    ])
+    if (!numericValid || (!draft && !valid)) return
+    if (propertyId && !existing) return
+    const id = existing?.id ?? newId('p')
+    const label = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', day: 'numeric', month: 'short', year: 'numeric' }).format(s.now)
+    const updated: Property = {
+      ...existing, id, op, kind, district: district ?? 'Не указан',
+      address: address.trim() || 'Адрес уточняется', price: amount,
+      area: area ? areaValue : undefined, rooms: rooms ?? undefined,
+      freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
+      owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft,
+      priceHistory: !existing ? [{ label, price: amount }] : existing.price === amount ? existing.priceHistory : [...existing.priceHistory, { label, price: amount }],
+    }
+    s.setProperties((ps) => existing ? ps.map((p) => p.id === id ? updated : p) : [updated, ...ps])
     s.closeSheet()
-    if (!draft) s.push({ name: 'property', id })
-    s.notify(draft ? 'Черновик сохранён' : 'Объект добавлен')
+    if (!existing && !draft) s.push({ name: 'property', id })
+    s.notify(draft ? 'Черновик сохранён' : existing ? 'Объект обновлён' : 'Объект добавлен')
   }
 
   return (
-    <SheetFrame title="Новый объект" onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
+    <SheetFrame title={existing ? 'Редактировать объект' : 'Новый объект'} onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
         <Segmented
           value={op}
@@ -322,6 +321,9 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
             placeholder={op === 'sale' ? '85 000' : '600'}
           />
         </Field>
+        <Field label="Адрес"><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Улица, дом" /></Field>
+        <Field label="Площадь, м²"><TextInput value={area} onChange={(e) => setArea(e.target.value)} inputMode="decimal" placeholder="Например, 65" /></Field>
+        {!numericValid && <p role="alert" className="text-[13px] text-destructive">Укажите корректную цену и положительную площадь.</p>}
         <Field label="Собственник" hint="Необязательно">
           <TextInput value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Имя или телефон" />
         </Field>
@@ -329,7 +331,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
           <Button size="lg" disabled={!valid} onClick={() => save()}>
             Сохранить объект
           </Button>
-          <Button size="lg" variant="ghost" onClick={() => save(true)}>
+          <Button size="lg" variant="ghost" disabled={!numericValid} onClick={() => save(true)}>
             Сохранить черновик
           </Button>
         </div>
