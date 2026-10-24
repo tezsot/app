@@ -122,20 +122,27 @@ export function DealsScreen() {
 export function DealDetail({ id }: { id: string }) {
   const s = useStore()
   const d = s.deals.find((x) => x.id === id)
+  const [editingStage, setEditingStage] = useState(false)
+  const [nextStep, setNextStep] = useState('')
   if (!d) return null
   const c = s.clients.find((x) => x.id === d.clientId)!
   const p = s.properties.find((x) => x.id === d.propertyId)!
   const left = d.commission.amount - d.commission.received
 
   const advance = () => {
-    if (d.stage >= DEAL_STAGES.length - 1) return
-    const prev = d
-    s.updateDeal(d.id, (x) => ({
-      ...x,
-      stage: x.stage + 1,
-      history: [{ id: `e${Date.now()}`, label: `Этап → ${DEAL_STAGES[x.stage + 1]}`, when: 'только что' }, ...x.history],
-    }))
-    s.notify(`Этап: ${DEAL_STAGES[d.stage + 1]}`, () => s.updateDeal(d.id, prev))
+    if (d.stage >= DEAL_STAGES.length - 1 || !editingStage || (d.stage < DEAL_STAGES.length - 2 && !nextStep.trim())) return
+    s.updateDeal(d.id, (x) => {
+      if (x.stage !== d.stage) return x
+      const stage = x.stage + 1
+      const next = stage === DEAL_STAGES.length - 1 ? 'Сделка завершена' : nextStep.trim()
+      return {
+        ...x, stage, next,
+        history: [{ id: crypto.randomUUID(), label: `Этап → ${DEAL_STAGES[stage]}. ${next}`, when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...x.history],
+      }
+    })
+    setEditingStage(false)
+    setNextStep('')
+    s.notify(`Этап: ${DEAL_STAGES[d.stage + 1]}`)
   }
 
   return (
@@ -177,7 +184,19 @@ export function DealDetail({ id }: { id: string }) {
             <p className="text-[15px] font-medium">{d.next}</p>
           </div>
           {d.stage < DEAL_STAGES.length - 1 && (
-            <Button className="mt-3 w-full" onClick={advance}>
+            editingStage ? (
+              <div className="mt-4 space-y-3 rounded-[14px] border border-border p-3">
+                <p className="text-[15px] font-medium">Подтвердить этап «{DEAL_STAGES[d.stage + 1]}»?</p>
+                {d.stage < DEAL_STAGES.length - 2 && <label className="block text-[13px]">Следующий шаг
+                  <input autoFocus value={nextStep} onChange={(e) => setNextStep(e.target.value)} maxLength={500} placeholder="Например, согласовать дату подписания" className="mt-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 text-[16px] focus-visible:outline-primary" />
+                </label>}
+                <p className="text-[13px] text-muted-foreground">Полученные оплаты сохранятся. Переход этапа не означает получение комиссии.</p>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => { setEditingStage(false); setNextStep('') }}>Отмена</Button>
+                  <Button disabled={d.stage < DEAL_STAGES.length - 2 && !nextStep.trim()} onClick={advance}>Подтвердить</Button>
+                </div>
+              </div>
+            ) : <Button className="mt-3 w-full" onClick={() => setEditingStage(true)}>
               Перевести: {DEAL_STAGES[d.stage + 1]}
             </Button>
           )}
