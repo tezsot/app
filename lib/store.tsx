@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { clockLabel, dayLabel, dayOffset, taskBucket } from './dates'
 import {
   type Client,
   type Deal,
@@ -50,10 +51,16 @@ export interface Toast {
   undo?: () => void
 }
 
-let uid = 100
-export const newId = (prefix: string) => `${prefix}${++uid}`
+export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
 
 function useStoreValue() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const refresh = () => setNow(new Date())
+    const timer = setInterval(refresh, 1000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [])
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [properties, setProperties] = useState<Property[]>(initialProperties)
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
@@ -122,7 +129,8 @@ function useStoreValue() {
   )
 
   const addTask = useCallback((task: Omit<Task, 'id' | 'done'>) => {
-    const t = { ...task, id: newId('t'), done: false }
+    if (!task.title.trim() || !Number.isFinite(Date.parse(task.dueAt))) throw new Error('Укажите название и корректный срок задачи')
+    const t = { ...task, title: task.title.trim(), id: newId('t'), done: false }
     setTasks((ts) => [t, ...ts])
     return t
   }, [])
@@ -148,9 +156,10 @@ function useStoreValue() {
     setClients,
     properties,
     setProperties,
-    tasks,
+    now,
+    tasks: tasks.map((task) => ({ ...task, bucket: taskBucket(task.dueAt, now), time: `${dayLabel(task.dueAt, now)}, ${clockLabel(task.dueAt)}` })),
     setTasks,
-    showings,
+    showings: showings.map((showing) => ({ ...showing, day: dayOffset(showing.startsAt, now), time: clockLabel(showing.startsAt) })),
     setShowings,
     deals,
     legal,

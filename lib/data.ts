@@ -1,3 +1,5 @@
+import { relativeDate } from './dates'
+
 export type Intent = 'buy' | 'rent'
 export type Op = 'sale' | 'rent'
 export type ClientStatus = 'new' | 'active' | 'contact' | 'closed'
@@ -36,8 +38,7 @@ export interface Task {
   kind: TaskKind
   clientId?: string
   propertyId?: string
-  bucket: Bucket
-  time: string
+  dueAt: string
   reason?: string
   done: boolean
 }
@@ -73,8 +74,7 @@ export interface Showing {
   id: string
   clientId: string
   propertyId: string
-  day: number
-  time: string
+  startsAt: string
   status: ShowingStatus
   place: string
   outcome?: string
@@ -362,8 +362,7 @@ export const initialTasks: Task[] = [
     title: 'Перезвонить с вариантами',
     kind: 'call',
     clientId: 'c1',
-    bucket: 'overdue',
-    time: 'вчера, 19:00',
+    dueAt: relativeDate(-1, '19:00'),
     reason: 'Обещали вчера — клиент ждёт',
     done: false,
   },
@@ -372,8 +371,7 @@ export const initialTasks: Task[] = [
     title: 'Ответить на пропущенный',
     kind: 'call',
     clientId: 'c4',
-    bucket: 'today',
-    time: '08:42',
+    dueAt: relativeDate(0, '08:42'),
     reason: 'Пропущенный звонок, новый клиент',
     done: false,
   },
@@ -382,8 +380,7 @@ export const initialTasks: Task[] = [
     title: 'Подтвердить актуальность',
     kind: 'check',
     propertyId: 'p3',
-    bucket: 'today',
-    time: '12:00',
+    dueAt: relativeDate(0, '12:00'),
     reason: 'Не проверялся 24 дня',
     done: false,
   },
@@ -392,8 +389,7 @@ export const initialTasks: Task[] = [
     title: 'Отправить подборку',
     kind: 'message',
     clientId: 'c5',
-    bucket: 'today',
-    time: '17:30',
+    dueAt: relativeDate(0, '17:30'),
     done: false,
   },
   {
@@ -401,16 +397,15 @@ export const initialTasks: Task[] = [
     title: 'Уточнить цену у собственника',
     kind: 'call',
     propertyId: 'p4',
-    bucket: 'later',
-    time: 'завтра, 10:00',
+    dueAt: relativeDate(1, '10:00'),
     done: false,
   },
 ]
 
 export const initialShowings: Showing[] = [
-  { id: 's1', clientId: 'c2', propertyId: 'p2', day: 0, time: '15:00', status: 'pending', place: 'У подъезда, Буюк Ипак Йули 24' },
-  { id: 's2', clientId: 'c1', propertyId: 'p1', day: 1, time: '11:00', status: 'confirmed', place: '11-квартал, у Мега Планет' },
-  { id: 's3', clientId: 'c3', propertyId: 'p3', day: 0, time: '10:00', status: 'done', place: 'У ворот дома', outcome: 'Думает' },
+  { id: 's1', clientId: 'c2', propertyId: 'p2', startsAt: relativeDate(0, '15:00'), status: 'pending', place: 'У подъезда, Буюк Ипак Йули 24' },
+  { id: 's2', clientId: 'c1', propertyId: 'p1', startsAt: relativeDate(1, '11:00'), status: 'confirmed', place: '11-квартал, у Мега Планет' },
+  { id: 's3', clientId: 'c3', propertyId: 'p3', startsAt: relativeDate(0, '10:00'), status: 'done', place: 'У ворот дома', outcome: 'Думает' },
 ]
 
 export const initialDeals: Deal[] = [

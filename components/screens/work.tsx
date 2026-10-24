@@ -1,5 +1,7 @@
 'use client'
 
+import { relativeDate } from '@/lib/dates'
+
 import {
   CalendarCheck,
   CalendarClock,
@@ -99,7 +101,7 @@ export function TasksScreen() {
   )
 }
 
-const DAYS = ['Сегодня', 'Завтра', 'Вс, 26', 'Пн, 27', 'Вт, 28']
+const DAYS = ['Сегодня', 'Завтра', 'Через 2 дня', 'Через 3 дня', 'Через 4 дня']
 
 export function ShowingsScreen() {
   const s = useStore()
@@ -224,9 +226,9 @@ export function ShowingsScreen() {
                       icon={RotateCcw}
                       aria-label="Перенести"
                       onClick={() => {
-                        s.updateShowing(sh.id, { status: 'moved', day: sh.day + 1 })
+                        s.updateShowing(sh.id, { status: 'pending', startsAt: relativeDate(sh.day + 1, sh.time, s.now) })
                         s.notify('Перенесён на следующий день', () =>
-                          s.updateShowing(sh.id, { status: sh.status, day: sh.day }),
+                          s.updateShowing(sh.id, { status: sh.status, startsAt: sh.startsAt }),
                         )
                       }}
                     >

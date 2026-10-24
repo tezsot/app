@@ -1,5 +1,7 @@
 'use client'
 
+import { relativeDate } from '@/lib/dates'
+
 import {
   Building2,
   CalendarPlus,
@@ -150,6 +152,7 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
   const valid = name.trim().length > 1 && phone.replace(/\D/g, '').length >= 9
 
   const save = () => {
+    if (!valid) return
     const b = budget !== null ? BUDGETS[intent][budget] : undefined
     const id = newId('c')
     s.setClients((cs) => [
@@ -168,7 +171,7 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
       },
       ...cs,
     ])
-    s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, bucket: 'today', time: 'сегодня' })
+    s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, dueAt: relativeDate(0) })
     s.closeSheet()
     s.push({ name: 'client', id })
     s.notify('Клиент добавлен, задача на звонок создана')
@@ -245,6 +248,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
   const valid = !!district && Number(price.replace(/\D/g, '')) > 0
 
   const save = (draft = false) => {
+    if (!draft && !valid) return
     const id = newId('p')
     s.setProperties((ps) => [
       {
@@ -333,12 +337,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
   )
 }
 
-const WHEN = [
-  { label: 'Сегодня', bucket: 'today' as const, time: 'сегодня' },
-  { label: 'Завтра', bucket: 'later' as const, time: 'завтра' },
-  { label: 'Через 3 дня', bucket: 'later' as const, time: 'пн, 27 окт' },
-  { label: 'Через неделю', bucket: 'later' as const, time: '31 окт' },
-]
+const WHEN = ['Сегодня', 'Завтра', 'Через 3 дня', 'Через неделю'].map((label) => ({ label }))
 const TIMES = ['10:00', '12:00', '15:00', '18:00']
 const TASK_PRESETS = ['Перезвонить', 'Отправить подборку', 'Уточнить цену', 'Напомнить о показе']
 
@@ -349,13 +348,13 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   const [time, setTime] = useState(TIMES[2])
   const [cid, setCid] = useState(clientId)
   const save = () => {
+    if (!title.trim()) return
     s.addTask({
       title,
       kind: title.includes('звон') ? 'call' : 'message',
       clientId: cid,
       propertyId,
-      bucket: WHEN[when].bucket,
-      time: `${WHEN[when].time}, ${time}`,
+      dueAt: relativeDate([0, 1, 3, 7][when], time),
     })
     if (cid) s.addHistory(cid, `Задача: ${title}`)
     s.closeSheet()
@@ -412,7 +411,7 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   )
 }
 
-const DAY_OPTS = ['Сегодня', 'Завтра', 'Вс, 26', 'Пн, 27']
+const DAY_OPTS = ['Сегодня', 'Завтра', 'Через 2 дня', 'Через 3 дня']
 const SLOT_OPTS = ['10:00', '11:30', '14:00', '16:00', '18:30']
 
 function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
@@ -426,17 +425,18 @@ function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
     .filter((p) => p.freshness !== 'sold' && p.freshness !== 'archived')
     .map((p) => ({ p, score: c ? matchScore(c, p) : 0 }))
     .sort((a, b) => b.score - a.score)
-  const valid = cid && pid
+  const valid = !!c && c.status !== 'closed' && options.some(({ p }) => p.id === pid)
 
   const save = () => {
-    const p = s.properties.find((x) => x.id === pid)!
+    const p = options.find(({ p }) => p.id === pid)?.p
+    if (!valid || !p) return
     s.setShowings((ss) => [
       ...ss,
-      { id: newId('s'), clientId: cid, propertyId: pid, day, time: slot, status: 'pending', place: p.address },
+      { id: newId('s'), clientId: cid, propertyId: pid, startsAt: relativeDate(day, slot), status: 'pending', place: p.address },
     ])
     s.addHistory(cid, `Показ назначен: ${DAY_OPTS[day].toLowerCase()}, ${slot}`)
     s.closeSheet()
-    s.notify('Показ назначен — напомним клиенту')
+    s.notify('Показ назначен в демо. Уведомления не отправляются')
   }
 
   return (
@@ -542,7 +542,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Перезвонить позже',
       on: () =>
         finish('перезвонить позже', () => {
-          s.addTask({ title: 'Перезвонить', kind: 'call', clientId: c.id, bucket: 'later', time: 'завтра, 12:00' })
+          s.addTask({ title: 'Перезвонить', kind: 'call', clientId: c.id, dueAt: relativeDate(1, '12:00') })
           s.closeSheet()
           s.notify('Напомним завтра в 12:00')
         }),
@@ -551,7 +551,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Не ответил',
       on: () =>
         finish('не ответил', () => {
-          s.addTask({ title: 'Повторить звонок', kind: 'call', clientId: c.id, bucket: 'today', time: '18:00' })
+          s.addTask({ title: 'Повторить звонок', kind: 'call', clientId: c.id, dueAt: relativeDate(0, '18:00') })
           s.closeSheet()
           s.notify('Повторный звонок в 18:00')
         }),
@@ -560,7 +560,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Отправить подборку',
       on: () =>
         finish('отправить подборку', () => {
-          s.addTask({ title: 'Отправить подборку', kind: 'message', clientId: c.id, bucket: 'today', time: 'сегодня' })
+          s.addTask({ title: 'Отправить подборку', kind: 'message', clientId: c.id, dueAt: relativeDate(0) })
           s.closeSheet()
           s.notify('Задача: отправить подборку')
         }),
@@ -586,7 +586,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
           </div>
           <p className="mt-5 text-[24px] font-semibold">{c.name}</p>
           <p className="text-[15px] text-muted-foreground tabular-nums" role="status">
-            Вызов… {c.phone}
+            Демо звонка · {c.phone}
           </p>
           <p className="mt-3 text-center text-[13px] text-muted-foreground">
             {c.intent === 'buy' ? 'Покупка' : 'Аренда'} · {budgetLabel(c)}
@@ -631,8 +631,8 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
       title: result === 'Понравилось' ? 'Обсудить условия' : result === 'Думает' ? 'Перезвонить после показа' : 'Отправить подборку',
       kind: 'call',
       clientId: sh.clientId,
-      bucket: 'later',
-      time: 'завтра, 12:00',
+      propertyId: sh.propertyId,
+      dueAt: relativeDate(1, '12:00'),
     })
     s.closeSheet()
     s.notify('Итог сохранён, следующий шаг создан')
@@ -817,7 +817,7 @@ function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
           </Chip>
         </div>
         <p className="text-center text-[13px] text-muted-foreground tabular-nums">
-          Остаток {money(left)} · платит {d.commission.payer.toLowerCase()}
+          Оста��ок {money(left)} · платит {d.commission.payer.toLowerCase()}
         </p>
         <Button size="lg" disabled={!n} onClick={save}>
           Отметить получение
@@ -833,32 +833,31 @@ export function SheetHost() {
     <>
       {sheets.map((sheet, i) => {
         const key = `${sheet.type}-${i}`
-        const props = { ...sheet, depth: i } as never
         switch (sheet.type) {
           case 'add':
-            return <AddMenu key={key} {...props} />
+            return <AddMenu key={key} {...sheet} depth={i} />
           case 'search':
-            return <SearchSheet key={key} {...props} />
+            return <SearchSheet key={key} {...sheet} depth={i} />
           case 'addClient':
-            return <AddClient key={key} {...props} />
+            return <AddClient key={key} {...sheet} depth={i} />
           case 'addProperty':
-            return <AddProperty key={key} {...props} />
+            return <AddProperty key={key} {...sheet} depth={i} />
           case 'addTask':
-            return <AddTask key={key} {...props} />
+            return <AddTask key={key} {...sheet} depth={i} />
           case 'addShowing':
-            return <AddShowing key={key} {...props} />
+            return <AddShowing key={key} {...sheet} depth={i} />
           case 'call':
-            return <CallSheet key={key} {...props} />
+            return <CallSheet key={key} {...sheet} depth={i} />
           case 'outcome':
-            return <OutcomeSheet key={key} {...props} />
+            return <OutcomeSheet key={key} {...sheet} depth={i} />
           case 'price':
-            return <PriceSheet key={key} {...props} />
+            return <PriceSheet key={key} {...sheet} depth={i} />
           case 'freshness':
-            return <FreshnessSheet key={key} {...props} />
+            return <FreshnessSheet key={key} {...sheet} depth={i} />
           case 'listing':
-            return <ListingSheet key={key} {...props} />
+            return <ListingSheet key={key} {...sheet} depth={i} />
           case 'payment':
-            return <PaymentSheet key={key} {...props} />
+            return <PaymentSheet key={key} {...sheet} depth={i} />
         }
       })}
     </>
