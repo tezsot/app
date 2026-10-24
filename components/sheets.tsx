@@ -35,6 +35,7 @@ import {
   matchScore,
   money,
   propertyTitle,
+  PROPERTY_KINDS,
 } from '@/lib/data'
 import { type Sheet, newId, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -286,7 +287,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
         />
         <Field label="Тип">
           <ChoiceRow>
-            {(['Квартира', 'Дом', 'Коммерция'] as const).map((k) => (
+            {PROPERTY_KINDS.map((k) => (
               <Chip key={k} active={kind === k} onClick={() => setKind(k)}>
                 {k}
               </Chip>

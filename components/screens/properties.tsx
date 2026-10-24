@@ -32,6 +32,7 @@ import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { budgetLabel } from './clients'
 import { PropertyActivity } from '@/components/property-activity'
+import { PropertyGallery } from '@/components/property-gallery'
 
 function PriceChange({ p }: { p: Property }) {
   const original = p.priceHistory[0]?.price
@@ -86,7 +87,7 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
           {p.district} · {p.address}
         </p>
         <p className={cn('mt-2 text-[12px]', p.freshness === 'recheck' ? 'text-warning-ink' : 'text-muted-foreground')}>
-          Проверено {p.checked}
+          {p.checked === 'не проверено' ? 'Ещё не проверено' : `Проверено ${p.checked}`}
         </p>
       </div>
     </button>
@@ -221,16 +222,7 @@ export function PropertyDetail({ id }: { id: string }) {
     }
   }
 
-  const hero = (
-    <div className="relative h-[320px] bg-secondary">
-      {!p.image && <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"><Building2 className="size-12" aria-hidden /><span>Фотографии пока не добавлены</span></div>}
-      {p.image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={p.image} alt={`${propertyTitle(p)}, ${p.district}`} className="size-full object-cover" />
-      )}
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
-    </div>
-  )
+  const hero = <PropertyGallery key={p.id} property={p} />
 
   return (
     <Screen
@@ -289,7 +281,7 @@ export function PropertyDetail({ id }: { id: string }) {
                 {p.freshness === 'recheck' ? 'Данные могли устареть' : p.freshness === 'confirmed' ? 'Данные актуальны' : FRESHNESS_LABEL[p.freshness]}
               </p>
               <p className="text-[13px] text-muted-foreground">
-                Проверено {p.checked} · собственник {p.owner}
+                {p.checked === 'не проверено' ? 'Ещё не проверено' : `Проверено ${p.checked}`} · собственник {p.owner}
               </p>
             </div>
           </div>

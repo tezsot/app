@@ -50,10 +50,12 @@ export interface DocItem {
   status: DocStatus
 }
 
+export const PROPERTY_KINDS = ['Квартира', 'Дом', 'Таунхаус', 'Дача', 'Участок', 'Офис', 'Торговое помещение', 'Склад', 'Гараж', 'Коммерция'] as const
+
 export interface Property {
   id: string
   op: Op
-  kind: 'Квартира' | 'Дом' | 'Коммерция'
+  kind: (typeof PROPERTY_KINDS)[number]
   district: string
   address: string
   price: number
@@ -62,6 +64,7 @@ export interface Property {
   floor?: number
   floors?: number
   image?: string
+  images?: string[]
   freshness: Freshness
   checked: string
   owner: string
@@ -243,6 +246,18 @@ export const initialClients: Client[] = [
 ]
 
 export const initialProperties: Property[] = [
+  {
+    id: 'p7', op: 'rent', kind: 'Офис', district: 'Мирабад', address: 'Демо · офис рядом с метро Ойбек',
+    price: 1200, area: 85, floor: 2, floors: 5, image: '/props/office.png',
+    images: ['/props/office.png', '/props/office-meeting.png'], freshness: 'new', checked: 'не проверено',
+    owner: 'Демо-собственник', priceHistory: [{ label: 'старт', price: 1200 }], docs: [],
+  },
+  {
+    id: 'p8', op: 'sale', kind: 'Таунхаус', district: 'Мирзо-Улугбек', address: 'Демо · жилой квартал',
+    price: 245000, area: 180, rooms: 4, floors: 2, image: '/props/townhouse.png',
+    images: ['/props/townhouse.png', '/props/townhouse-living.png'], freshness: 'new', checked: 'не проверено',
+    owner: 'Демо-собственник', priceHistory: [{ label: 'старт', price: 245000 }], docs: saleDocs(),
+  },
   {
     id: 'p1',
     op: 'sale',
@@ -508,7 +523,7 @@ export function initials(name: string) {
 export function propertyTitle(p: Property) {
   if (p.kind === 'Квартира') return `${p.rooms ?? ''}-комн. квартира`
   if (p.kind === 'Дом') return `Дом${p.area ? `, ${p.area} м²` : ''}`
-  return `Помещение${p.area ? `, ${p.area} м²` : ''}`
+  return `${p.kind === 'Коммерция' ? 'Помещение' : p.kind}${p.area ? `, ${p.area} м²` : ''}`
 }
 
 export function matchScore(c: Client, p: Property) {
