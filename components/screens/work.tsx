@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 const BUCKET_LABEL: Record<Bucket, string> = { overdue: 'Просрочено', today: 'Сегодня', later: 'Позже' }
 
-export function TasksScreen() {
+export function TasksScreen({ taskId }: { taskId?: string }) {
   const s = useStore()
   const [showDone, setShowDone] = useState(false)
   const buckets: Bucket[] = ['overdue', 'today', 'later']
@@ -38,15 +38,15 @@ export function TasksScreen() {
       onBack={s.pop}
       actions={
         <>
-          <Button size="sm" variant="ghost" className="glass h-11" onClick={() => setShowDone((v) => !v)}>
-            {showDone ? 'Скрыть готовые' : 'Готовые'}
+          <Button size="sm" variant="ghost" className="glass h-11" onClick={() => taskId ? s.push({ name: 'tasks' }) : setShowDone((v) => !v)}>
+            {taskId ? 'Все задачи' : showDone ? 'Скрыть готовые' : 'Готовые'}
           </Button>
           <GlassButton icon={Plus} label="Новая задача" onClick={() => s.openSheet({ type: 'addTask' })} />
         </>
       }
     >
       {buckets.map((b) => {
-        const list = s.tasks.filter((t) => t.bucket === b && (showDone || !t.done))
+        const list = s.tasks.filter((t) => t.bucket === b && (taskId ? t.id === taskId : (showDone || !t.done)))
         if (!list.length) return null
         return (
           <Group key={b} header={BUCKET_LABEL[b]}>

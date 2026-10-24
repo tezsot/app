@@ -39,7 +39,7 @@ function renderRoute(r: Route) {
     case 'docs':
       return <DocsScreen id={r.id} />
     case 'tasks':
-      return <TasksScreen />
+      return <TasksScreen taskId={r.taskId} />
     case 'showings':
       return <ShowingsScreen />
     case 'legal':

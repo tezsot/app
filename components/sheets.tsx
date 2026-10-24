@@ -82,15 +82,23 @@ function AddMenu({ depth }: SheetProps<'add'>) {
 function SearchSheet({ depth }: SheetProps<'search'>) {
   const s = useStore()
   const [q, setQ] = useState('')
-  const ql = q.toLowerCase().trim()
-  const clients = ql ? s.clients.filter((c) => `${c.name} ${c.phone}`.toLowerCase().includes(ql)) : s.clients.slice(0, 3)
-  const props = ql
-    ? s.properties.filter((p) => `${p.district} ${p.address} ${p.kind} ${p.price}`.toLowerCase().includes(ql))
-    : []
+  const ql = q.toLocaleLowerCase('ru').trim().replace(/ё/g, 'е')
+  const matches = (text: string) => ql.split(/\s+/).every((word) => text.toLocaleLowerCase('ru').replace(/ё/g, 'е').includes(word))
+  const phoneQuery = /^[+\d\s()-]+$/.test(ql) ? ql.replace(/\D/g, '') : ''
+  const clients = ql ? s.clients.filter((c) => matches(`${c.name} ${c.phone} ${c.district ?? ''}`) || (phoneQuery.length >= 3 && c.phone.replace(/\D/g, '').includes(phoneQuery))) : []
+  const props = ql ? s.properties.filter((p) => matches(`${propertyTitle(p)} ${p.district} ${p.address} ${p.kind} ${p.price} ${p.draft ? 'черновик' : ''}`)) : []
+  const relatedText = (clientId?: string, propertyId?: string) => {
+    const c = s.clients.find((item) => item.id === clientId)
+    const p = s.properties.find((item) => item.id === propertyId)
+    return `${c?.name ?? ''} ${p ? `${propertyTitle(p)} ${p.address} ${p.district}` : ''}`
+  }
+  const tasks = ql ? s.tasks.filter((t) => matches(`${t.title} ${relatedText(t.clientId, t.propertyId)}`)) : []
+  const deals = ql ? s.deals.filter((d) => matches(`${d.id} ${d.next} ${relatedText(d.clientId, d.propertyId)}`)) : []
+  const total = clients.length + props.length + tasks.length + deals.length
   return (
     <SheetFrame title="Поиск" onClose={s.closeSheet} depth={depth}>
       <div className="px-4 pt-1 pb-4">
-        <SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, телефон" autoFocus />
+        <SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, задачи, сделки" autoFocus />
       </div>
       {clients.length > 0 && (
         <Group header={ql ? 'Клиенты' : 'Недавние'}>
@@ -113,12 +121,19 @@ function SearchSheet({ depth }: SheetProps<'search'>) {
               icon={Building2}
               title={propertyTitle(p)}
               subtitle={`${money(p.price, p.op)} · ${p.district}`}
-              onClick={() => s.push({ name: 'property', id: p.id })}
+              onClick={() => p.draft ? s.replaceSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })}
             />
           ))}
         </Group>
       )}
-      {ql && !clients.length && !props.length && (
+      {tasks.length > 0 && <Group header={`Задачи · ${tasks.length}`}>
+        {tasks.map((t) => <Row key={t.id} title={t.title} subtitle={`${t.done ? 'Выполнена' : t.time} · ${relatedText(t.clientId, t.propertyId).trim() || 'Без привязки'}`} onClick={() => s.push({ name: 'tasks', taskId: t.id })} />)}
+      </Group>}
+      {deals.length > 0 && <Group header={`Сделки · ${deals.length}`}>
+        {deals.map((d) => <Row key={d.id} title={s.clients.find((c) => c.id === d.clientId)?.name ?? 'Сделка'} subtitle={`${relatedText(undefined, d.propertyId).trim()} · ${d.next}`} onClick={() => s.push({ name: 'deal', id: d.id })} />)}
+      </Group>}
+      <p role="status" aria-live="polite" className="px-8 py-2 text-[13px] text-muted-foreground">{ql ? `Найдено: ${total}` : 'Введите имя, телефон, адрес, название задачи или сделки.'}</p>
+      {ql && total === 0 && (
         <p className="px-8 py-10 text-center text-[15px] text-muted-foreground">
           Ничего не найдено по «{q}». Проверьте написание или ищите по району.
         </p>
