@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Share,
-  TrendingDown,
 } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -32,6 +31,14 @@ import { FRESHNESS_LABEL, type Freshness, type Property, matchScore, money, prop
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { budgetLabel } from './clients'
+import { PropertyActivity } from '@/components/property-activity'
+
+function PriceChange({ p }: { p: Property }) {
+  const original = p.priceHistory[0]?.price
+  if (p.priceHistory.length < 2 || !original || original === p.price) return null
+  const change = ((p.price - original) / original) * 100
+  return <span className={cn('text-[13px] font-medium tabular-nums', change < 0 ? 'text-success-ink' : 'text-muted-foreground')}>{change > 0 ? '+' : '−'}{Math.abs(change).toFixed(1)}%</span>
+}
 
 export function freshnessKind(f: Freshness) {
   if (f === 'confirmed' || f === 'new') return 'success' as const
@@ -68,12 +75,7 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
       <div className="px-4 pt-3 pb-4">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[22px] font-bold tabular-nums">{money(p.price, p.op)}</p>
-          {p.priceHistory.length > 1 && (
-            <span className="flex items-center gap-0.5 text-[13px] font-medium text-success-ink">
-              <TrendingDown className="size-3.5" aria-hidden />
-              {Math.round(((p.priceHistory[0].price - p.price) / p.priceHistory[0].price) * 100)}%
-            </span>
-          )}
+          <PriceChange p={p} />
         </div>
         <p className="mt-0.5 text-[15px]">
           {propertyTitle(p)}
@@ -203,10 +205,25 @@ export function PropertyDetail({ id }: { id: string }) {
   const interested = s.clients
     .map((c) => ({ c, score: matchScore(c, p) }))
     .filter((m) => m.score > 0 && m.c.status !== 'closed')
-  const max = Math.max(...p.priceHistory.map((h) => h.price))
+  interested.sort((a, b) => b.score - a.score)
+  const active = ['new', 'confirmed', 'recheck'].includes(p.freshness)
+  const max = Math.max(1, ...p.priceHistory.map((h) => h.price))
+  const share = async () => {
+    const text = `${p.op === 'sale' ? 'Продажа' : 'Аренда'} · ${propertyTitle(p)}\n${p.district} · ${p.address}\n${money(p.price, p.op)}${p.area ? `\nПлощадь: ${p.area} м²` : ''}`
+    try {
+      if (navigator.share) await navigator.share({ title: propertyTitle(p), text })
+      else {
+        await navigator.clipboard.writeText(text)
+        s.notify('Описание скопировано без контактов собственника')
+      }
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) s.notify('Не удалось поделиться. Проверьте разрешения браузера.')
+    }
+  }
 
   const hero = (
     <div className="relative h-[320px] bg-secondary">
+      {!p.image && <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground"><Building2 className="size-12" aria-hidden /><span>Фотографии пока не добавлены</span></div>}
       {p.image && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={p.image} alt={`${propertyTitle(p)}, ${p.district}`} className="size-full object-cover" />
@@ -224,7 +241,7 @@ export function PropertyDetail({ id }: { id: string }) {
       hero={hero}
       actions={
         <>
-          <GlassButton icon={Share} label="Поделиться" onClick={() => s.notify('Ссылка на объект скопирована')} />
+          <GlassButton icon={Share} label="Поделиться" onClick={share} />
           <GlassButton icon={Pencil} label="Изменить цену" onClick={() => s.openSheet({ type: 'price', propertyId: p.id })} />
         </>
       }
@@ -246,8 +263,8 @@ export function PropertyDetail({ id }: { id: string }) {
 
       <div className="grid grid-cols-4 gap-2 px-4 pb-5">
         {[
-          { icon: Phone, label: 'Владелец', on: () => s.notify(`Звонок: ${p.owner}`) },
-          { icon: CalendarPlus, label: 'Показ', on: () => s.openSheet({ type: 'addShowing', propertyId: p.id }) },
+          { icon: Phone, label: 'Владелец', on: () => s.notify(`Собственник: ${p.owner}. Телефон не указан — звонок недоступен.`) },
+          { icon: CalendarPlus, label: 'Показ', on: () => active ? s.openSheet({ type: 'addShowing', propertyId: p.id }) : s.notify('Сначала верните объект в актуальный статус') },
           { icon: Megaphone, label: 'Объявление', on: () => s.openSheet({ type: 'listing', propertyId: p.id }) },
           { icon: RefreshCw, label: 'Статус', on: () => s.openSheet({ type: 'freshness', propertyId: p.id }) },
         ].map((a) => (
@@ -266,10 +283,10 @@ export function PropertyDetail({ id }: { id: string }) {
       <section className="px-4 pb-6" aria-label="Актуальность">
         <div className={cn('rounded-[22px] p-4', p.freshness === 'recheck' ? 'bg-warning/12' : 'bg-card')}>
           <div className="flex items-start gap-3">
-            <IconTile icon={RefreshCw} tone={p.freshness === 'recheck' ? 'warning' : 'success'} />
+            <IconTile icon={RefreshCw} tone={p.freshness === 'confirmed' ? 'success' : 'warning'} />
             <div className="min-w-0 flex-1">
               <p className="text-[16px] font-semibold">
-                {p.freshness === 'recheck' ? 'Данные могли устареть' : 'Данные актуальны'}
+                {p.freshness === 'recheck' ? 'Данные могли устареть' : p.freshness === 'confirmed' ? 'Данные актуальны' : FRESHNESS_LABEL[p.freshness]}
               </p>
               <p className="text-[13px] text-muted-foreground">
                 Проверено {p.checked} · собственник {p.owner}
@@ -296,7 +313,10 @@ export function PropertyDetail({ id }: { id: string }) {
         </div>
       </section>
 
+      <PropertyActivity propertyId={p.id} active={active} />
+
       <Group header="Характеристики">
+        {p.op === 'sale' && !!p.area && p.area > 0 && <Row title="Цена за м²" value={`${money(Math.round(p.price / p.area))} / м²`} />}
         <Row title="Тип" value={p.kind} />
         {p.rooms && <Row title="Комнат" value={p.rooms} />}
         {p.area && <Row title="Площадь" value={`${p.area} м²`} />}
