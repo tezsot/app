@@ -13,6 +13,9 @@ import {
   Users,
 } from 'lucide-react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { SheetFrame } from '@/components/ios/sheet'
+import { dayLabel } from '@/lib/dates'
 import {
   Avatar,
   Badge,
@@ -44,15 +47,21 @@ import { cn } from '@/lib/utils'
 type View = 'all' | 'contact' | 'active' | 'nonext' | 'closed'
 
 export function budgetLabel(c: Client) {
-  if (!c.budgetMax) return 'Бюджет не указан'
   const suffix = c.intent === 'rent' ? '/мес' : ''
-  return `${compactMoney(c.budgetMin ?? 0)}–${compactMoney(c.budgetMax)}${suffix}`
+  if (c.budgetMin == null && c.budgetMax == null) return 'Бюджет не указан'
+  if (c.budgetMax == null) return `от ${compactMoney(c.budgetMin!)}${suffix}`
+  if (c.budgetMin == null) return `до ${compactMoney(c.budgetMax)}${suffix}`
+  return `${compactMoney(c.budgetMin)}–${compactMoney(c.budgetMax)}${suffix}`
 }
 
 export function ClientsScreen() {
   const s = useStore()
   const [view, setView] = useState<View>('all')
   const [q, setQ] = useState('')
+  const [intent, setIntent] = useState('all')
+  const [sort, setSort] = useState('priority')
+  const query = q.trim().toLowerCase()
+  const phoneQuery = /^[+\d\s()-]+$/.test(query) ? query.replace(/\D/g, '') : ''
 
   const nextFor = (id: string) => clientNext(id, s.tasks, s.showings, s.now)
   const needsContact = (c: Client) => c.status !== 'closed' && (c.status === 'contact' || c.status === 'new' || nextFor(c.id)?.bucket === 'overdue')
@@ -73,8 +82,9 @@ export function ClientsScreen() {
       if (view === 'closed') return c.status === 'closed'
       return true
     })
-    .filter((c) => !q || `${c.name} ${c.phone} ${c.district}`.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => priority(a) - priority(b))
+    .filter(c => intent === 'all' || c.intent === intent)
+    .filter((c) => !query || `${c.name} ${c.phone} ${c.district ?? ''}`.toLowerCase().includes(query) || (phoneQuery.length >= 3 && c.phone.replace(/\D/g, '').includes(phoneQuery)))
+    .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, 'ru') : priority(a) - priority(b))
 
   const counts = {
     contact: s.clients.filter(needsContact).length,
@@ -107,13 +117,17 @@ export function ClientsScreen() {
         </Chip>
       </ChipScroller>
 
+      <div className="flex gap-2 px-4 pb-4">
+        <select aria-label="Цель клиента" value={intent} onChange={e => setIntent(e.target.value)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-card px-3 text-sm"><option value="all">Все цели</option><option value="buy">Покупка</option><option value="rent">Аренда</option></select>
+        <select aria-label="Сортировка клиентов" value={sort} onChange={e => setSort(e.target.value)} className="min-h-11 min-w-0 flex-1 rounded-xl bg-card px-3 text-sm"><option value="priority">По приоритету</option><option value="name">По имени</option></select>
+      </div>
       {filtered.length === 0 ? (
         <Empty
           icon={Users}
-          title={q ? 'Ничего не найдено' : 'Здесь пусто'}
-          text={q ? 'Попробуйте имя, часть телефона или район' : 'Добавьте первого клиента — достаточно имени и телефона'}
+          title={s.clients.length ? 'Нет клиентов по этим условиям' : 'Пока нет клиентов'}
+          text={s.clients.length ? 'Измените запрос или сбросьте фильтры' : 'Добавьте первого клиента — достаточно имени и телефона'}
           action={
-            !q && (
+            s.clients.length ? <Button onClick={() => { setQ(''); setView('all'); setIntent('all') }}>Сбросить фильтры</Button> : (
               <Button icon={Plus} onClick={() => s.openSheet({ type: 'addClient' })}>
                 Добавить клиента
               </Button>
@@ -121,7 +135,7 @@ export function ClientsScreen() {
           }
         />
       ) : (
-        <Group footer="Сортировка: сначала те, с кем нужно связаться">
+        <Group footer={sort === 'name' ? 'Сортировка по имени' : 'Сначала те, с кем нужно связаться'}>
           {filtered.map((c) => {
             const t = nextFor(c.id)
             return (
@@ -172,23 +186,25 @@ export function ClientsScreen() {
 export function ClientDetail({ id }: { id: string }) {
   const s = useStore()
   const c = s.clients.find((x) => x.id === id)
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [note, setNote] = useState('')
+  const [allMatches, setAllMatches] = useState(false)
   if (!c) return null
   const next = clientNext(c.id, s.tasks, s.showings, s.now)
   const matches = s.properties
     .map((p) => ({ p, score: matchScore(c, p) }))
     .filter((m) => m.score > 0)
     .sort((a, b) => b.score - a.score)
-  const showings = s.showings.filter((sh) => sh.clientId === c.id)
+  const showings = s.showings.filter((sh) => sh.clientId === c.id).sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt))
   const deals = s.deals.filter((d) => d.clientId === c.id)
 
   const actions = [
-    { icon: Phone, label: 'Позвонить', on: () => s.openSheet({ type: 'call', clientId: c.id, taskId: next?.id }) },
+    { icon: Phone, label: 'Позвонить', on: () => s.openSheet({ type: 'call', clientId: c.id, taskId: next?.source === 'task' && next.kind === 'call' ? next.id : undefined }) },
     {
       icon: MessageCircle,
       label: 'Написать',
       on: () => {
-        s.addHistory(c.id, 'Сообщение в Telegram')
-        s.notify('Открыт чат в Telegram')
+        s.notify('Telegram не подключён. Сообщение не отправлено; свяжитесь с клиентом по указанному телефону.')
       },
     },
     { icon: CalendarPlus, label: 'Показ', on: () => s.openSheet({ type: 'addShowing', clientId: c.id }) },
@@ -273,12 +289,13 @@ export function ClientDetail({ id }: { id: string }) {
 
       <Group
         header={`Подходящие объекты · ${matches.length}`}
+        action={matches.length > 3 ? <button type="button" onClick={() => setAllMatches(v => !v)} className="min-h-11 text-sm font-medium">{allMatches ? 'Свернуть' : 'Все объекты'}</button> : undefined}
         footer={matches.length > 0 ? 'Совпадение по типу, бюджету, району и комнатам' : undefined}
       >
         {matches.length === 0 ? (
           <Row title="Пока нет совпадений" subtitle="Добавьте объект или уточните запрос" />
         ) : (
-          matches.map(({ p, score }) => (
+          (allMatches ? matches : matches.slice(0, 3)).map(({ p, score }) => (
             <div key={p.id} className="group/row flex items-center gap-3 pl-4">
               <button
                 type="button"
@@ -328,7 +345,7 @@ export function ClientDetail({ id }: { id: string }) {
                 key={sh.id}
                 icon={CalendarPlus}
                 title={propertyTitle(p)}
-                subtitle={`${sh.day === 0 ? 'Сегодня' : sh.day === 1 ? 'Завтра' : `Через ${sh.day} дн.`}, ${sh.time} · ${SHOWING_LABEL[sh.status]}${sh.outcome ? ` · ${sh.outcome}` : ''}`}
+                subtitle={`${dayLabel(sh.startsAt, s.now)}, ${sh.time} · ${SHOWING_LABEL[sh.status]}${sh.outcome ? ` · ${sh.outcome}` : ''}`}
                 onClick={() => s.push({ name: 'showings' })}
               />
             )
@@ -346,16 +363,24 @@ export function ClientDetail({ id }: { id: string }) {
         </Group>
       )}
 
+      {noteOpen && createPortal(<div className="fixed inset-0 z-[100] mx-auto max-w-[600px]">
+        <SheetFrame title="Заметка о клиенте" confirmLabel="Сохранить" confirmDisabled={!note.trim()} detent="auto" onClose={() => { setNoteOpen(false); setNote('') }} onConfirm={() => {
+          if (!note.trim()) return
+          s.addHistory(c.id, `Заметка: ${note.trim()}`)
+          setNoteOpen(false)
+          setNote('')
+          s.notify('Заметка добавлена в историю')
+        }}>
+          <label className="block p-5 text-sm">Текст заметки<textarea autoFocus maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className="mt-2 min-h-32 w-full rounded-xl border border-border bg-background p-3 text-base" placeholder="Что важно помнить о клиенте?" /></label>
+        </SheetFrame>
+      </div>, document.body)}
       <Group
         header="История"
         action={
           <button
             type="button"
             className="flex items-center gap-1 text-[15px] font-medium"
-            onClick={() => {
-              s.addHistory(c.id, 'Заметка: уточнить ипотеку')
-              s.notify('Заметка добавлена')
-            }}
+            onClick={() => setNoteOpen(true)}
           >
             <StickyNote className="size-4" aria-hidden />
             Заметка

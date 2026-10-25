@@ -527,33 +527,22 @@ export function propertyTitle(p: Property) {
   return `${p.kind === 'Коммерция' ? 'Помещение' : p.kind}${p.area ? `, ${p.area} м²` : ''}`
 }
 
+function matchCriteria(c: Client, p: Property) {
+  return [
+    { label: 'Тип', weight: 30, active: true, matches: p.kind === c.kind },
+    { label: 'Бюджет', weight: 35, active: c.budgetMin != null || c.budgetMax != null, matches: (c.budgetMin == null || p.price >= c.budgetMin) && (c.budgetMax == null || p.price <= c.budgetMax) },
+    { label: 'Район', weight: 25, active: !!c.district, matches: p.district === c.district },
+    { label: 'Комнаты', weight: 10, active: !!c.rooms, matches: p.rooms === c.rooms },
+  ].filter(rule => rule.active)
+}
+
 export function matchScore(c: Client, p: Property) {
-  if (p.op !== (c.intent === 'buy' ? 'sale' : 'rent') || p.freshness === 'sold' || p.freshness === 'archived') return 0
-  let score = 0
-  const reasons: string[] = []
-  if (p.kind === c.kind) {
-    score += 30
-    reasons.push('тип')
-  }
-  if (c.budgetMax && p.price <= c.budgetMax && p.price >= (c.budgetMin ?? 0) * 0.85) {
-    score += 35
-    reasons.push('бюджет')
-  }
-  if (c.district && p.district === c.district) {
-    score += 25
-    reasons.push('район')
-  }
-  if (c.rooms && p.rooms === c.rooms) {
-    score += 10
-    reasons.push('комнаты')
-  }
+  if (p.draft || p.kind !== c.kind || p.op !== (c.intent === 'buy' ? 'sale' : 'rent') || !['new', 'confirmed', 'recheck'].includes(p.freshness)) return 0
+  const rules = matchCriteria(c, p)
+  const score = Math.round(100 * rules.filter(rule => rule.matches).reduce((sum, rule) => sum + rule.weight, 0) / rules.reduce((sum, rule) => sum + rule.weight, 0))
   return score >= 55 ? score : 0
 }
 
 export function matchReasons(c: Client, p: Property) {
-  const r: string[] = []
-  if (c.district && p.district === c.district) r.push('Район')
-  if (c.budgetMax && p.price <= c.budgetMax) r.push('Бюджет')
-  if (c.rooms && p.rooms === c.rooms) r.push('Комнаты')
-  return r
+  return matchScore(c, p) ? matchCriteria(c, p).filter(rule => rule.matches).map(rule => rule.label) : []
 }
