@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Onboarding } from '@/components/onboarding'
 import { TabBar } from '@/components/ios/tab-bar'
 import { AiToolsScreen } from '@/components/ai-tools'
+import { MarketScreen } from '@/components/screens/market'
 import { ToastHost } from '@/components/ios/toast'
 import { ClientDetail, ClientsScreen } from '@/components/screens/clients'
 import { DealDetail, DealsScreen } from '@/components/screens/deals'
@@ -33,6 +34,8 @@ const ROOTS: Record<Tab, () => React.ReactNode> = {
 
 function renderRoute(r: Route) {
   switch (r.name) {
+    case 'market':
+      return <MarketScreen />
     case 'ai':
       return <AiToolsScreen />
     case 'client':

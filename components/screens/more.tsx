@@ -64,6 +64,7 @@ export function MoreScreen() {
         />
       </Group>
       <AiToolsSection />
+      <Group><Row icon={BarChart3} title="Аналитика рынка" subtitle="Демо · цены, районы и доходность" onClick={() => s.push({ name: 'market' })} /></Group>
       <Group header="Работа">
         <Row icon={ListChecks} tone="dark" title="Задачи" value={open} onClick={() => s.push({ name: 'tasks' })} />
         <Row
