@@ -64,6 +64,7 @@ export function MoreScreen() {
           className="min-h-[72px]"
         />
       </Group>
+      <Group><Row icon={GraduationCap} title="Достижения" subtitle="Демо · задания, coins и награды" onClick={() => s.push({ name: 'rewards' })} /></Group>
       <AiToolsSection />
       <CallDemo />
       <Group><Row icon={BarChart3} title="Аналитика рынка" subtitle="Демо · цены, районы и доходность" onClick={() => s.push({ name: 'market' })} /></Group>
