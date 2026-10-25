@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ProfileIntro } from '@/components/profile-intro'
 import { ArrowRight, Users, CalendarCheck, Sparkles, House } from 'lucide-react'
 
 const slides = [
@@ -31,7 +32,7 @@ export function Onboarding({ onComplete }: { onComplete: (destination: 'home' | 
         <h1 className="mt-3 whitespace-pre-line text-[30px] font-semibold leading-tight tracking-tight">{slide.title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{slide.text}</p>
         <ul className="mt-5 space-y-2 text-sm">{slide.items.map(item => <li key={item} className="flex items-center gap-3"><span className="size-1.5 rounded-full bg-primary" aria-hidden />{item}</li>)}</ul>
-      </section> : <section>
+      </section> : step === 3 ? <ProfileIntro onComplete={() => setStep(4)} /> : <section>
         <p className="text-xs font-medium text-primary">ПОДСТРОИМ ПЕРВЫЙ ШАГ</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">С чего начнём?</h1>
         <p className="mt-2 text-sm text-muted-foreground">Выберите стартовый раздел. Все остальные тоже будут доступны.</p>
@@ -42,8 +43,8 @@ export function Onboarding({ onComplete }: { onComplete: (destination: 'home' | 
       </section>}
     </div>
     <footer className="shrink-0 border-t border-border px-6 py-4">
-      <div className="mb-3 flex items-center justify-between"><span className="text-xs text-muted-foreground">{step + 1} из 4</span><div className="flex gap-1.5" aria-hidden>{[0,1,2,3].map(i => <span key={i} className={`h-1.5 rounded-full ${i === step ? 'w-6 bg-primary' : 'w-1.5 bg-muted-foreground/25'}`} />)}</div></div>
-      <div className="flex gap-3">{step > 0 && <button onClick={() => setStep(step - 1)} className="min-h-12 rounded-xl border border-border px-4 text-sm">Назад</button>}<button onClick={() => step < 3 ? setStep(step + 1) : onComplete(destination)} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground">{step === 3 ? 'Открыть рабочее место' : 'Продолжить'}<ArrowRight className="size-4" aria-hidden /></button></div>
+      <div className="mb-3 flex items-center justify-between"><span className="text-xs text-muted-foreground">{step + 1} из 5</span><div className="flex gap-1.5" aria-hidden>{[0,1,2,3,4].map(i => <span key={i} className={`h-1.5 rounded-full ${i === step ? 'w-6 bg-primary' : 'w-1.5 bg-muted-foreground/25'}`} />)}</div></div>
+      <div className="flex gap-3">{step > 0 && <button onClick={() => setStep(step - 1)} className="min-h-12 rounded-xl border border-border px-4 text-sm">Назад</button>}<button style={step === 3 ? { display: 'none' } : undefined} onClick={() => step < 4 ? setStep(step + 1) : onComplete(destination)} className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground">{step === 4 ? 'Открыть рабочее место' : 'Продолжить'}<ArrowRight className="size-4" aria-hidden /></button></div>
       <p className="mt-3 text-center text-[11px] leading-relaxed text-muted-foreground">Демо с примерами данных. Настройки не сохраняются после перезагрузки.</p>
     </footer>
   </main>
