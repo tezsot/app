@@ -1,6 +1,8 @@
 'use client'
 
 import { BatteryFull, SignalHigh, Wifi } from 'lucide-react'
+import { useState } from 'react'
+import { Onboarding } from '@/components/onboarding'
 import { TabBar } from '@/components/ios/tab-bar'
 import { AiToolsScreen } from '@/components/ai-tools'
 import { ToastHost } from '@/components/ios/toast'
@@ -71,7 +73,8 @@ function StatusBar() {
 }
 
 function Phone() {
-  const { tab, stacks, theme } = useStore()
+  const { tab, stacks, theme, setTab, push } = useStore()
+  const [introduced, setIntroduced] = useState(false)
   const stack = stacks[tab]
   return (
     <div
@@ -82,6 +85,11 @@ function Phone() {
       )}
     >
       <StatusBar />
+      {!introduced ? <Onboarding onComplete={destination => {
+        if (destination === 'ai') push({ name: 'ai' })
+        else setTab(destination)
+        setIntroduced(true)
+      }} /> : <>
       <main className="absolute inset-0" key={tab}>
         <div className={cn('absolute inset-0', stack.length > 0 && 'pointer-events-none')} aria-hidden={stack.length > 0}>
           {ROOTS[tab]()}
@@ -102,6 +110,7 @@ function Phone() {
       <TabBar />
       <ToastHost />
       <SheetHost />
+      </>}
       <div
         aria-hidden
         className="pointer-events-none absolute bottom-2 left-1/2 z-[95] hidden h-[5px] w-[134px] -translate-x-1/2 rounded-full bg-foreground/80 md:block"
