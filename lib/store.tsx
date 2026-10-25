@@ -24,6 +24,7 @@ export type Route =
   | { name: 'property'; id: string }
   | { name: 'deal'; id: string }
   | { name: 'docs'; id: string }
+  | { name: 'ai' }
   | { name: 'tasks'; taskId?: string }
   | { name: 'showings' }
   | { name: 'legal' }

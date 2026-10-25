@@ -2,6 +2,7 @@
 
 import { BatteryFull, SignalHigh, Wifi } from 'lucide-react'
 import { TabBar } from '@/components/ios/tab-bar'
+import { AiToolsScreen } from '@/components/ai-tools'
 import { ToastHost } from '@/components/ios/toast'
 import { ClientDetail, ClientsScreen } from '@/components/screens/clients'
 import { DealDetail, DealsScreen } from '@/components/screens/deals'
@@ -30,6 +31,8 @@ const ROOTS: Record<Tab, () => React.ReactNode> = {
 
 function renderRoute(r: Route) {
   switch (r.name) {
+    case 'ai':
+      return <AiToolsScreen />
     case 'client':
       return <ClientDetail id={r.id} />
     case 'property':
