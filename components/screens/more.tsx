@@ -21,6 +21,7 @@ import {
 import { useState } from 'react'
 import { Avatar, Badge, Group, Progress, Row, Screen, Segmented } from '@/components/ios/primitives'
 import { AiToolsSection } from '@/components/ai-tools'
+import { CallDemo } from '@/components/call-demo'
 import { DOC_LABEL, type DocStatus, propertyTitle } from '@/lib/data'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,7 @@ export function MoreScreen() {
         />
       </Group>
       <AiToolsSection />
+      <CallDemo />
       <Group><Row icon={BarChart3} title="Аналитика рынка" subtitle="Демо · цены, районы и доходность" onClick={() => s.push({ name: 'market' })} /></Group>
       <Group header="Работа">
         <Row icon={ListChecks} tone="dark" title="Задачи" value={open} onClick={() => s.push({ name: 'tasks' })} />
