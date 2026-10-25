@@ -1,7 +1,19 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight, Sparkles, FilePenLine, Megaphone, ScanText, Columns2, MessagesSquare, ClipboardList, Phone, MessageCircleMore, CalendarCheck, ClipboardCheck, ListChecks } from 'lucide-react'
+
+const toolIcons = {
+  listing: FilePenLine, social: Megaphone, audit: ScanText, compare: Columns2,
+  reply: MessagesSquare, lead: ClipboardList, call: Phone, followup: MessageCircleMore,
+  prepare: CalendarCheck, outcome: ClipboardCheck, checklist: ListChecks,
+}
+
+function ToolIcon({ tool }: { tool: typeof AI_TOOLS[number] }) {
+  const Icon = toolIcons[tool.id]
+  const color = tool.category === 'Объекты' ? 'bg-blue-600' : tool.category === 'Клиенты' ? 'bg-violet-600' : 'bg-emerald-700'
+  return <span aria-hidden="true" className={`flex size-12 shrink-0 items-center justify-center rounded-[14px] text-white shadow-sm ring-1 ring-inset ring-white/15 ${color}`}><Icon className="size-6" strokeWidth={1.75} /></span>
+}
 import { AI_LANGUAGES, AI_TONES, AI_TOOLS } from '@/lib/ai-tools'
 import { useStore } from '@/lib/store'
 import { Button, Screen } from '@/components/ios/primitives'
@@ -54,11 +66,11 @@ export function AiToolsScreen() {
       {!active ? <>
         <label className="block text-sm">Найти инструмент<input className={field} value={query} onChange={e => setQuery(e.target.value)} placeholder="Например, возражение или показ" /></label>
         <div className="flex flex-wrap gap-2">{['Все', 'Объекты', 'Клиенты', 'Сделки'].map(c => <button key={c} aria-pressed={category === c} onClick={() => setCategory(c)} className={`min-h-11 rounded-full px-4 text-sm ${category === c ? 'bg-primary text-primary-foreground' : 'bg-card'}`}>{c}</button>)}</div>
-        <div className="space-y-3">{AI_TOOLS.filter(t => (category === 'Все' || t.category === category) && `${t.title} ${t.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(t => <button key={t.id} onClick={() => { setSelected(t.id); setResult(''); setError('') }} className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left"><span className="flex-1"><span className="text-xs text-muted-foreground">{t.category}</span><strong className="mt-1 block text-base">{t.title}</strong><span className="mt-1 block text-sm text-muted-foreground">{t.description}</span></span><ArrowRight className="size-4 shrink-0 text-primary" /></button>)}</div>
+        <div className="space-y-3">{AI_TOOLS.filter(t => (category === 'Все' || t.category === category) && `${t.title} ${t.description}`.toLowerCase().includes(query.trim().toLowerCase())).map(t => <button key={t.id} onClick={() => { setSelected(t.id); setResult(''); setError('') }} className="flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left"><ToolIcon tool={t} /><span className="min-w-0 flex-1"><span className="text-xs text-muted-foreground">{t.category}</span><strong className="mt-1 block text-base">{t.title}</strong><span className="mt-1 block text-sm text-muted-foreground">{t.description}</span></span><ArrowRight className="size-4 shrink-0 text-primary" /></button>)}</div>
         {!AI_TOOLS.some(t => (category === 'Все' || t.category === category) && `${t.title} ${t.description}`.toLowerCase().includes(query.trim().toLowerCase())) && <p role="status">Ничего не найдено. Измените запрос или категорию.</p>}
       </> : <>
         <button disabled={busy} onClick={() => setSelected('')} className="min-h-11 text-sm font-medium text-primary">Все инструменты</button>
-        <div><h2 className="text-xl font-semibold">{active.title}</h2><p className="mt-1 text-sm text-muted-foreground">{active.description}</p></div>
+        <div className="flex items-start gap-3"><ToolIcon tool={active} /><div className="min-w-0"><h2 className="text-xl font-semibold">{active.title}</h2><p className="mt-1 text-sm text-muted-foreground">{active.description}</p></div></div>
         <fieldset disabled={busy} className="space-y-4 disabled:opacity-60">
           <details className="rounded-2xl bg-card p-4"><summary className="cursor-pointer text-sm font-medium">Добавить контекст из CRM</summary>
             <p className="mt-2 text-xs text-muted-foreground">Только характеристики и запрос. Имена, телефоны, адреса собственников и внутренние заметки не добавляются. Можно выбрать несколько объектов.</p>
