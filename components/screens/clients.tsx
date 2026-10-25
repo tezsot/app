@@ -338,7 +338,7 @@ export function ClientDetail({ id }: { id: string }) {
               key={d.id}
               icon={Handshake}
               tone="dark"
-              title={`Сделка · ${DEAL_STAGES[d.stage]}`}
+              title={`Сделка · ${d.cancellation ? 'Отменена' : DEAL_STAGES[d.stage]}`}
               subtitle={`Комиссия ${money(d.commission.amount)}`}
               onClick={() => s.push({ name: 'deal', id: d.id })}
             />

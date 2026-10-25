@@ -828,7 +828,7 @@ function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
   const n = cents === null ? 0 : cents / 100
   const valid = cents !== null && cents <= Math.round(left * 100)
   const save = () => {
-    if (!valid || cents === null) return
+    if (!valid || cents === null || d.cancellation) return
     s.updateDeal(d.id, (x) => ({
       ...x,
       commission: { ...x.commission, ...applyPayment(x.commission.amount, x.commission.received, cents) },

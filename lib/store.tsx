@@ -158,7 +158,7 @@ function useStoreValue() {
     if (!client || !property) throw new Error('Выберите активного клиента и доступный объект')
     if ((client.intent === 'rent' ? 'rent' : 'sale') !== property.op) throw new Error('Цель клиента не соответствует объекту')
     if (!Number.isFinite(input.amount) || input.amount <= 0 || !input.next.trim()) throw new Error('Укажите положительную комиссию и следующий шаг')
-    if (deals.some(d => d.clientId === client.id && d.propertyId === property.id && d.stage < 5)) throw new Error('Активная сделка с этим клиентом и объектом уже существует')
+    if (deals.some(d => d.clientId === client.id && d.propertyId === property.id && !d.cancellation && d.stage < 5)) throw new Error('Активная сделка с этим клиентом и объектом уже существует')
     const deal: Deal = { id: newId('d'), clientId: client.id, propertyId: property.id, type: property.op, stage: 3, next: input.next.trim(), commission: { amount: input.amount, payer: property.op === 'rent' ? 'Арендатор' : 'Покупатель', status: 'expected', received: 0, due: 'Не назначено', split: [{ name: 'Вы', share: 100 }] }, history: [{ id: newId('h'), label: 'Сделка создана', when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(now) }] }
     setDeals(ds => [...ds, deal])
     return deal

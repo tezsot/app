@@ -89,6 +89,7 @@ export interface Deal {
   propertyId: string
   type: Op
   stage: number
+  cancellation?: { reason: string; at: string }
   next: string
   commission: {
     amount: number

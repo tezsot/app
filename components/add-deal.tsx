@@ -16,7 +16,7 @@ export function AddDeal({ depth, clientId = '', propertyId = '' }: { depth: numb
   const saving = useRef(false)
   const client = s.clients.find(c => c.id === cid)
   const properties = s.properties.filter(p => !p.draft && ['new', 'confirmed', 'recheck'].includes(p.freshness) && (!client || p.op === (client.intent === 'rent' ? 'rent' : 'sale')))
-  const duplicate = s.deals.find(d => d.clientId === cid && d.propertyId === pid && d.stage < 5)
+  const duplicate = s.deals.find(d => d.clientId === cid && d.propertyId === pid && !d.cancellation && d.stage < 5)
   const valid = !!client && properties.some(p => p.id === pid) && Number.isFinite(Number(amount)) && Number(amount) > 0 && !!next.trim() && !duplicate
   const save = () => {
     if (!valid || saving.current) return
