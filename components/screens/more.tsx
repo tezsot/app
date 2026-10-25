@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { Avatar, Badge, Group, Progress, Row, Screen, Segmented } from '@/components/ios/primitives'
+import { AiToolsSection } from '@/components/ai-tools'
 import { DOC_LABEL, type DocStatus, propertyTitle } from '@/lib/data'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -62,6 +63,7 @@ export function MoreScreen() {
           className="min-h-[72px]"
         />
       </Group>
+      <AiToolsSection />
       <Group header="Работа">
         <Row icon={ListChecks} tone="dark" title="Задачи" value={open} onClick={() => s.push({ name: 'tasks' })} />
         <Row
