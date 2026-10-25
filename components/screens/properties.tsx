@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Share,
-  TrendingDown,
 } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -32,6 +31,15 @@ import { FRESHNESS_LABEL, type Freshness, type Property, matchScore, money, prop
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { budgetLabel } from './clients'
+import { PropertyActivity } from '@/components/property-activity'
+import { PropertyGallery } from '@/components/property-gallery'
+
+function PriceChange({ p }: { p: Property }) {
+  const original = p.priceHistory[0]?.price
+  if (p.priceHistory.length < 2 || !original || original === p.price) return null
+  const change = ((p.price - original) / original) * 100
+  return <span className={cn('text-[13px] font-medium tabular-nums', change < 0 ? 'text-success-ink' : 'text-muted-foreground')}>{change > 0 ? '+' : '−'}{Math.abs(change).toFixed(1)}%</span>
+}
 
 export function freshnessKind(f: Freshness) {
   if (f === 'confirmed' || f === 'new') return 'success' as const
@@ -68,12 +76,7 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
       <div className="px-4 pt-3 pb-4">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[22px] font-bold tabular-nums">{money(p.price, p.op)}</p>
-          {p.priceHistory.length > 1 && (
-            <span className="flex items-center gap-0.5 text-[13px] font-medium text-success-ink">
-              <TrendingDown className="size-3.5" aria-hidden />
-              {Math.round(((p.priceHistory[0].price - p.price) / p.priceHistory[0].price) * 100)}%
-            </span>
-          )}
+          <PriceChange p={p} />
         </div>
         <p className="mt-0.5 text-[15px]">
           {propertyTitle(p)}
@@ -84,8 +87,30 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
           {p.district} · {p.address}
         </p>
         <p className={cn('mt-2 text-[12px]', p.freshness === 'recheck' ? 'text-warning-ink' : 'text-muted-foreground')}>
-          Проверено {p.checked}
+          {p.checked === 'не проверено' ? 'Ещё не проверено' : `Проверено ${p.checked}`}
         </p>
+      </div>
+    </button>
+  )
+}
+
+function PropertyListItem({ p, onOpen }: { p: Property; onOpen: () => void }) {
+  return (
+    <button type="button" onClick={onOpen} className="press flex w-full items-center gap-3 rounded-[20px] bg-card p-3 text-left focus-visible:outline-2 focus-visible:outline-primary">
+      <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-secondary">
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.image} alt="" loading="lazy" className="size-full object-cover" />
+        ) : <Building2 className="size-7 text-muted-foreground" aria-hidden />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[17px] font-bold tabular-nums">{money(p.price, p.op)}</p>
+        <p className="truncate text-[14px]">{propertyTitle(p)}{p.area && p.kind === 'Квартира' ? ` · ${p.area} м²` : ''}</p>
+        <p className="truncate text-[12px] text-muted-foreground">{p.district} · {p.address}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">{p.op === 'sale' ? 'Продажа' : 'Аренда'}</span>
+          <Badge kind={freshnessKind(p.freshness)}>{FRESHNESS_LABEL[p.freshness]}</Badge>
+        </div>
       </div>
     </button>
   )
@@ -93,12 +118,15 @@ function PropertyCard({ p, onOpen }: { p: Property; onOpen: () => void }) {
 
 export function PropertiesScreen() {
   const s = useStore()
+  const [view, setView] = useState<'cards' | 'list'>('cards')
   const [op, setOp] = useState<'all' | 'sale' | 'rent'>('all')
-  const [state, setState] = useState<'all' | 'recheck' | 'active' | 'archive'>('all')
+  const [state, setState] = useState<'all' | 'recheck' | 'active' | 'archive' | 'draft'>('all')
 
   const list = s.properties
     .filter((p) => op === 'all' || p.op === op)
     .filter((p) => {
+      if (state === 'draft') return !!p.draft
+      if (p.draft) return false
       if (state === 'recheck') return p.freshness === 'recheck'
       if (state === 'active') return p.freshness === 'confirmed' || p.freshness === 'new'
       if (state === 'archive') return p.freshness === 'sold' || p.freshness === 'archived'
@@ -135,7 +163,18 @@ export function PropertiesScreen() {
         <Chip active={state === 'archive'} onClick={() => setState('archive')}>
           Продано и архив
         </Chip>
+        <Chip active={state === 'draft'} onClick={() => setState('draft')} count={s.properties.filter((p) => p.draft).length}>Черновики</Chip>
       </ChipScroller>
+      <div className="flex items-center justify-between gap-3 px-4 pb-3">
+        <span className="text-[13px] text-muted-foreground">Найдено: {list.length}</span>
+        <div className="flex rounded-full bg-secondary p-1" role="group" aria-label="Вид объектов">
+          {([{ value: 'cards', label: 'Карточки' }, { value: 'list', label: 'Список' }] as const).map((option) => (
+            <button key={option.value} type="button" aria-pressed={view === option.value} onClick={() => setView(option.value)} className={cn('min-h-10 rounded-full px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary', view === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {list.length === 0 ? (
         <Empty
           icon={Building2}
@@ -150,7 +189,11 @@ export function PropertiesScreen() {
       ) : (
         <div className="flex flex-col gap-3 px-4">
           {list.map((p) => (
-            <PropertyCard key={p.id} p={p} onOpen={() => s.push({ name: 'property', id: p.id })} />
+            view === 'cards' ? (
+              <PropertyCard key={p.id} p={p} onOpen={() => p.draft ? s.openSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })} />
+            ) : (
+              <PropertyListItem key={p.id} p={p} onOpen={() => p.draft ? s.openSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })} />
+            )
           ))}
         </div>
       )}
@@ -166,17 +209,23 @@ export function PropertyDetail({ id }: { id: string }) {
   const interested = s.clients
     .map((c) => ({ c, score: matchScore(c, p) }))
     .filter((m) => m.score > 0 && m.c.status !== 'closed')
-  const max = Math.max(...p.priceHistory.map((h) => h.price))
+  interested.sort((a, b) => b.score - a.score)
+  const active = ['new', 'confirmed', 'recheck'].includes(p.freshness)
+  const max = Math.max(1, ...p.priceHistory.map((h) => h.price))
+  const share = async () => {
+    const text = `${p.op === 'sale' ? 'Продажа' : 'Аренда'} · ${propertyTitle(p)}\n${p.district} · ${p.address}\n${money(p.price, p.op)}${p.area ? `\nПлощадь: ${p.area} м²` : ''}`
+    try {
+      if (navigator.share) await navigator.share({ title: propertyTitle(p), text })
+      else {
+        await navigator.clipboard.writeText(text)
+        s.notify('Описание скопировано без контактов собственника')
+      }
+    } catch (error) {
+      if (!(error instanceof Error && error.name === 'AbortError')) s.notify('Не удалось поделиться. Проверьте разрешения браузера.')
+    }
+  }
 
-  const hero = (
-    <div className="relative h-[320px] bg-secondary">
-      {p.image && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={p.image} alt={`${propertyTitle(p)}, ${p.district}`} className="size-full object-cover" />
-      )}
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
-    </div>
-  )
+  const hero = <PropertyGallery key={p.id} property={p} />
 
   return (
     <Screen
@@ -187,7 +236,7 @@ export function PropertyDetail({ id }: { id: string }) {
       hero={hero}
       actions={
         <>
-          <GlassButton icon={Share} label="Поделиться" onClick={() => s.notify('Ссылка на объект скопирована')} />
+          <GlassButton icon={Share} label="Поделиться" onClick={share} />
           <GlassButton icon={Pencil} label="Изменить цену" onClick={() => s.openSheet({ type: 'price', propertyId: p.id })} />
         </>
       }
@@ -209,8 +258,8 @@ export function PropertyDetail({ id }: { id: string }) {
 
       <div className="grid grid-cols-4 gap-2 px-4 pb-5">
         {[
-          { icon: Phone, label: 'Владелец', on: () => s.notify(`Звонок: ${p.owner}`) },
-          { icon: CalendarPlus, label: 'Показ', on: () => s.openSheet({ type: 'addShowing', propertyId: p.id }) },
+          { icon: Phone, label: 'Владелец', on: () => s.notify(`Собственник: ${p.owner}. Телефон не указан — звонок недоступен.`) },
+          { icon: CalendarPlus, label: 'Показ', on: () => active ? s.openSheet({ type: 'addShowing', propertyId: p.id }) : s.notify('Сначала верните объект в актуальный статус') },
           { icon: Megaphone, label: 'Объявление', on: () => s.openSheet({ type: 'listing', propertyId: p.id }) },
           { icon: RefreshCw, label: 'Статус', on: () => s.openSheet({ type: 'freshness', propertyId: p.id }) },
         ].map((a) => (
@@ -229,13 +278,13 @@ export function PropertyDetail({ id }: { id: string }) {
       <section className="px-4 pb-6" aria-label="Актуальность">
         <div className={cn('rounded-[22px] p-4', p.freshness === 'recheck' ? 'bg-warning/12' : 'bg-card')}>
           <div className="flex items-start gap-3">
-            <IconTile icon={RefreshCw} tone={p.freshness === 'recheck' ? 'warning' : 'success'} />
+            <IconTile icon={RefreshCw} tone={p.freshness === 'confirmed' ? 'success' : 'warning'} />
             <div className="min-w-0 flex-1">
               <p className="text-[16px] font-semibold">
-                {p.freshness === 'recheck' ? 'Данные могли устареть' : 'Данные актуальны'}
+                {p.freshness === 'recheck' ? 'Данные могли устареть' : p.freshness === 'confirmed' ? 'Данные актуальны' : FRESHNESS_LABEL[p.freshness]}
               </p>
               <p className="text-[13px] text-muted-foreground">
-                Проверено {p.checked} · собственник {p.owner}
+                {p.checked === 'не проверено' ? 'Ещё не проверено' : `Проверено ${p.checked}`} · собственник {p.owner}
               </p>
             </div>
           </div>
@@ -259,7 +308,11 @@ export function PropertyDetail({ id }: { id: string }) {
         </div>
       </section>
 
+      <PropertyActivity propertyId={p.id} active={active} />
+
+      <div className="px-4 pb-4"><Button onClick={() => s.openSheet({ type: 'addProperty', propertyId: p.id })}>Редактировать объект</Button></div>
       <Group header="Характеристики">
+        {p.op === 'sale' && !!p.area && p.area > 0 && <Row title="Цена за м²" value={`${money(Math.round(p.price / p.area))} / м²`} />}
         <Row title="Тип" value={p.kind} />
         {p.rooms && <Row title="Комнат" value={p.rooms} />}
         {p.area && <Row title="Площадь" value={`${p.area} м²`} />}

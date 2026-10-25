@@ -1,5 +1,7 @@
 'use client'
 
+import { clientNext } from '@/lib/client-next'
+
 import {
   Building2,
   CalendarClock,
@@ -87,6 +89,15 @@ export function HomeScreen() {
       })
     })
 
+  s.clients.filter(c => c.status !== 'closed' && !clientNext(c.id, s.tasks, s.showings, s.now)).forEach(c => {
+    attention.push({
+      id: `next-${c.id}`, icon: CalendarClock, tone: 'warning',
+      title: `${c.name}: нет следующего шага`, reason: 'Назначьте контакт, чтобы не потерять клиента', action: 'Назначить',
+      onAction: () => s.openSheet({ type: 'addTask', clientId: c.id }),
+      onOpen: () => s.push({ name: 'client', id: c.id }),
+    })
+  })
+
   const today = [
     ...s.tasks
       .filter((t) => t.bucket === 'today')
@@ -94,7 +105,7 @@ export function HomeScreen() {
     ...s.showings
       .filter((sh) => sh.day === 0)
       .map((sh) => ({ kind: 'showing' as const, time: sh.time, showing: sh })),
-  ].sort((a, b) => a.time.localeCompare(b.time))
+  ].sort((a, b) => Date.parse(a.kind === 'task' ? a.task.dueAt : a.showing.startsAt) - Date.parse(b.kind === 'task' ? b.task.dueAt : b.showing.startsAt))
 
   const recheck = s.properties.filter((p) => p.freshness === 'recheck').length
   const legalDone = s.legal.filter((l) => l.done).length
@@ -103,7 +114,7 @@ export function HomeScreen() {
   return (
     <Screen
       title="Сегодня"
-      subtitle="Пятница, 24 октября"
+      subtitle={new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', weekday: 'long', day: 'numeric', month: 'long' }).format(s.now)}
       actions={
         <>
           <GlassButton icon={Plus} label="Добавить" onClick={() => s.openSheet({ type: 'add' })} />
@@ -118,6 +129,7 @@ export function HomeScreen() {
         </>
       }
     >
+      <p className="px-8 pb-4 text-[13px] text-muted-foreground">Демо · изменения сбрасываются при перезагрузке. Звонки и уведомления не отправляются.</p>
       <section className="px-4 pb-6" aria-labelledby="attention-h">
         <div className="flex items-end justify-between px-4 pb-2">
           <h2 id="attention-h" className="label-section">

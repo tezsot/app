@@ -211,7 +211,7 @@ export function LegalScreen() {
         <div className="flex gap-3 rounded-[22px] bg-card p-4">
           <Info className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
           <div>
-            <p className="text-[15px] font-medium">Сверено 20 октября 2026</p>
+            <p className="text-[15px] font-medium">Демо-материал · юридическая проверка не проведена</p>
             <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
               Требования могут меняться. Перед подачей проверьте актуальную редакцию на официальном ресурсе. Приложение
               не оказывает юридических услуг.

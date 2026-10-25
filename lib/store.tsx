@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useCallback, useContext, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { clockLabel, dayLabel, dayOffset, taskBucket } from './dates'
 import {
   type Client,
   type Deal,
@@ -23,7 +24,7 @@ export type Route =
   | { name: 'property'; id: string }
   | { name: 'deal'; id: string }
   | { name: 'docs'; id: string }
-  | { name: 'tasks' }
+  | { name: 'tasks'; taskId?: string }
   | { name: 'showings' }
   | { name: 'legal' }
   | { name: 'docsList' }
@@ -33,8 +34,9 @@ export type Route =
 export type Sheet =
   | { type: 'add' }
   | { type: 'search' }
-  | { type: 'addClient' }
-  | { type: 'addProperty' }
+  | { type: 'addDeal'; clientId?: string; propertyId?: string }
+  | { type: 'addClient'; clientId?: string }
+  | { type: 'addProperty'; propertyId?: string }
   | { type: 'addTask'; clientId?: string; propertyId?: string }
   | { type: 'addShowing'; clientId?: string; propertyId?: string }
   | { type: 'call'; clientId: string; taskId?: string }
@@ -50,10 +52,16 @@ export interface Toast {
   undo?: () => void
 }
 
-let uid = 100
-export const newId = (prefix: string) => `${prefix}${++uid}`
+export const newId = (prefix: string) => `${prefix}-${crypto.randomUUID()}`
 
 function useStoreValue() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const refresh = () => setNow(new Date())
+    const timer = setInterval(refresh, 1000)
+    window.addEventListener('focus', refresh)
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [])
   const [clients, setClients] = useState<Client[]>(initialClients)
   const [properties, setProperties] = useState<Property[]>(initialProperties)
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
@@ -122,7 +130,8 @@ function useStoreValue() {
   )
 
   const addTask = useCallback((task: Omit<Task, 'id' | 'done'>) => {
-    const t = { ...task, id: newId('t'), done: false }
+    if (!task.title.trim() || !Number.isFinite(Date.parse(task.dueAt))) throw new Error('Укажите название и корректный срок задачи')
+    const t = { ...task, title: task.title.trim(), id: newId('t'), done: false }
     setTasks((ts) => [t, ...ts])
     return t
   }, [])
@@ -143,14 +152,28 @@ function useStoreValue() {
     setDeals((ds) => ds.map((d) => (d.id === id ? (typeof patch === 'function' ? patch(d) : { ...d, ...patch }) : d)))
   }, [])
 
+  const createDeal = (input: { clientId: string; propertyId: string; amount: number; next: string }) => {
+    const client = clients.find(c => c.id === input.clientId && c.status !== 'closed')
+    const property = properties.find(p => p.id === input.propertyId && !p.draft && ['new', 'confirmed', 'recheck'].includes(p.freshness))
+    if (!client || !property) throw new Error('Выберите активного клиента и доступный объект')
+    if ((client.intent === 'rent' ? 'rent' : 'sale') !== property.op) throw new Error('Цель клиента не соответствует объекту')
+    if (!Number.isFinite(input.amount) || input.amount <= 0 || !input.next.trim()) throw new Error('Укажите положительную комиссию и следующий шаг')
+    if (deals.some(d => d.clientId === client.id && d.propertyId === property.id && !d.cancellation && d.stage < 5)) throw new Error('Активная сделка с этим клиентом и объектом уже существует')
+    const deal: Deal = { id: newId('d'), clientId: client.id, propertyId: property.id, type: property.op, stage: 3, next: input.next.trim(), commission: { amount: input.amount, payer: property.op === 'rent' ? 'Арендатор' : 'Покупатель', status: 'expected', received: 0, due: 'Не назначено', split: [{ name: 'Вы', share: 100 }] }, history: [{ id: newId('h'), label: 'Сделка создана', when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(now) }] }
+    setDeals(ds => [...ds, deal])
+    return deal
+  }
+
   return {
+    createDeal,
     clients,
     setClients,
     properties,
     setProperties,
-    tasks,
+    now,
+    tasks: tasks.map((task) => ({ ...task, bucket: taskBucket(task.dueAt, now), time: `${dayLabel(task.dueAt, now)}, ${clockLabel(task.dueAt)}` })),
     setTasks,
-    showings,
+    showings: showings.map((showing) => ({ ...showing, day: dayOffset(showing.startsAt, now), time: clockLabel(showing.startsAt) })),
     setShowings,
     deals,
     legal,

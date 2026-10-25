@@ -1,5 +1,7 @@
 'use client'
 
+import { relativeDate } from '@/lib/dates'
+
 import {
   CalendarCheck,
   CalendarClock,
@@ -21,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 const BUCKET_LABEL: Record<Bucket, string> = { overdue: 'Просрочено', today: 'Сегодня', later: 'Позже' }
 
-export function TasksScreen() {
+export function TasksScreen({ taskId }: { taskId?: string }) {
   const s = useStore()
   const [showDone, setShowDone] = useState(false)
   const buckets: Bucket[] = ['overdue', 'today', 'later']
@@ -36,15 +38,15 @@ export function TasksScreen() {
       onBack={s.pop}
       actions={
         <>
-          <Button size="sm" variant="ghost" className="glass h-11" onClick={() => setShowDone((v) => !v)}>
-            {showDone ? 'Скрыть готовые' : 'Готовые'}
+          <Button size="sm" variant="ghost" className="glass h-11" onClick={() => taskId ? s.push({ name: 'tasks' }) : setShowDone((v) => !v)}>
+            {taskId ? 'Все задачи' : showDone ? 'Скрыть готовые' : 'Готовые'}
           </Button>
           <GlassButton icon={Plus} label="Новая задача" onClick={() => s.openSheet({ type: 'addTask' })} />
         </>
       }
     >
       {buckets.map((b) => {
-        const list = s.tasks.filter((t) => t.bucket === b && (showDone || !t.done))
+        const list = s.tasks.filter((t) => t.bucket === b && (taskId ? t.id === taskId : (showDone || !t.done)))
         if (!list.length) return null
         return (
           <Group key={b} header={BUCKET_LABEL[b]}>
@@ -99,7 +101,7 @@ export function TasksScreen() {
   )
 }
 
-const DAYS = ['Сегодня', 'Завтра', 'Вс, 26', 'Пн, 27', 'Вт, 28']
+const DAYS = ['Сегодня', 'Завтра', 'Через 2 дня', 'Через 3 дня', 'Через 4 дня']
 
 export function ShowingsScreen() {
   const s = useStore()
@@ -224,9 +226,9 @@ export function ShowingsScreen() {
                       icon={RotateCcw}
                       aria-label="Перенести"
                       onClick={() => {
-                        s.updateShowing(sh.id, { status: 'moved', day: sh.day + 1 })
+                        s.updateShowing(sh.id, { status: 'pending', startsAt: relativeDate(sh.day + 1, sh.time, s.now) })
                         s.notify('Перенесён на следующий день', () =>
-                          s.updateShowing(sh.id, { status: sh.status, day: sh.day }),
+                          s.updateShowing(sh.id, { status: sh.status, startsAt: sh.startsAt }),
                         )
                       }}
                     >

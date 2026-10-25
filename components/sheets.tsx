@@ -1,5 +1,10 @@
 'use client'
 
+import { AddDeal } from '@/components/add-deal'
+import { parsePayment, applyPayment } from '@/lib/payments'
+
+import { relativeDate } from '@/lib/dates'
+
 import {
   Building2,
   CalendarPlus,
@@ -33,6 +38,7 @@ import {
   matchScore,
   money,
   propertyTitle,
+  PROPERTY_KINDS,
 } from '@/lib/data'
 import { type Sheet, newId, useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -79,15 +85,23 @@ function AddMenu({ depth }: SheetProps<'add'>) {
 function SearchSheet({ depth }: SheetProps<'search'>) {
   const s = useStore()
   const [q, setQ] = useState('')
-  const ql = q.toLowerCase().trim()
-  const clients = ql ? s.clients.filter((c) => `${c.name} ${c.phone}`.toLowerCase().includes(ql)) : s.clients.slice(0, 3)
-  const props = ql
-    ? s.properties.filter((p) => `${p.district} ${p.address} ${p.kind} ${p.price}`.toLowerCase().includes(ql))
-    : []
+  const ql = q.toLocaleLowerCase('ru').trim().replace(/ё/g, 'е')
+  const matches = (text: string) => ql.split(/\s+/).every((word) => text.toLocaleLowerCase('ru').replace(/ё/g, 'е').includes(word))
+  const phoneQuery = /^[+\d\s()-]+$/.test(ql) ? ql.replace(/\D/g, '') : ''
+  const clients = ql ? s.clients.filter((c) => matches(`${c.name} ${c.phone} ${c.district ?? ''}`) || (phoneQuery.length >= 3 && c.phone.replace(/\D/g, '').includes(phoneQuery))) : []
+  const props = ql ? s.properties.filter((p) => matches(`${propertyTitle(p)} ${p.district} ${p.address} ${p.kind} ${p.price} ${p.draft ? 'черновик' : ''}`)) : []
+  const relatedText = (clientId?: string, propertyId?: string) => {
+    const c = s.clients.find((item) => item.id === clientId)
+    const p = s.properties.find((item) => item.id === propertyId)
+    return `${c?.name ?? ''} ${p ? `${propertyTitle(p)} ${p.address} ${p.district}` : ''}`
+  }
+  const tasks = ql ? s.tasks.filter((t) => matches(`${t.title} ${relatedText(t.clientId, t.propertyId)}`)) : []
+  const deals = ql ? s.deals.filter((d) => matches(`${d.id} ${d.next} ${relatedText(d.clientId, d.propertyId)}`)) : []
+  const total = clients.length + props.length + tasks.length + deals.length
   return (
     <SheetFrame title="Поиск" onClose={s.closeSheet} depth={depth}>
       <div className="px-4 pt-1 pb-4">
-        <SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, телефон" autoFocus />
+        <SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, задачи, сделки" autoFocus />
       </div>
       {clients.length > 0 && (
         <Group header={ql ? 'Клиенты' : 'Недавние'}>
@@ -110,12 +124,19 @@ function SearchSheet({ depth }: SheetProps<'search'>) {
               icon={Building2}
               title={propertyTitle(p)}
               subtitle={`${money(p.price, p.op)} · ${p.district}`}
-              onClick={() => s.push({ name: 'property', id: p.id })}
+              onClick={() => p.draft ? s.replaceSheet({ type: 'addProperty', propertyId: p.id }) : s.push({ name: 'property', id: p.id })}
             />
           ))}
         </Group>
       )}
-      {ql && !clients.length && !props.length && (
+      {tasks.length > 0 && <Group header={`Задачи · ${tasks.length}`}>
+        {tasks.map((t) => <Row key={t.id} title={t.title} subtitle={`${t.done ? 'Выполнена' : t.time} · ${relatedText(t.clientId, t.propertyId).trim() || 'Без привязки'}`} onClick={() => s.push({ name: 'tasks', taskId: t.id })} />)}
+      </Group>}
+      {deals.length > 0 && <Group header={`Сделки · ${deals.length}`}>
+        {deals.map((d) => <Row key={d.id} title={s.clients.find((c) => c.id === d.clientId)?.name ?? 'Сделка'} subtitle={`${relatedText(undefined, d.propertyId).trim()} · ${d.next}`} onClick={() => s.push({ name: 'deal', id: d.id })} />)}
+      </Group>}
+      <p role="status" aria-live="polite" className="px-8 py-2 text-[13px] text-muted-foreground">{ql ? `Найдено: ${total}` : 'Введите имя, телефон, адрес, название задачи или сделки.'}</p>
+      {ql && total === 0 && (
         <p className="px-8 py-10 text-center text-[15px] text-muted-foreground">
           Ничего не найдено по «{q}». Проверьте написание или ищите по району.
         </p>
@@ -139,43 +160,47 @@ const BUDGETS: Record<Intent, { label: string; min: number; max: number }[]> = {
   ],
 }
 
-function AddClient({ depth }: SheetProps<'addClient'>) {
+function AddClient({ depth, clientId }: SheetProps<'addClient'>) {
   const s = useStore()
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('+998 ')
-  const [intent, setIntent] = useState<Intent>('buy')
+  const existing = s.clients.find((c) => c.id === clientId)
+  const [name, setName] = useState(existing?.name ?? '')
+  const [phone, setPhone] = useState(existing?.phone ?? '+998 ')
+  const [intent, setIntent] = useState<Intent>(existing?.intent ?? 'buy')
   const [budget, setBudget] = useState<number | null>(null)
-  const [district, setDistrict] = useState<string | null>(null)
-  const [more, setMore] = useState(false)
-  const valid = name.trim().length > 1 && phone.replace(/\D/g, '').length >= 9
+  const [min, setMin] = useState(existing?.budgetMin?.toString() ?? '')
+  const [max, setMax] = useState(existing?.budgetMax?.toString() ?? '')
+  const [kind, setKind] = useState(existing?.kind ?? 'Квартира')
+  const [rooms, setRooms] = useState(existing?.rooms?.toString() ?? '')
+  const [note, setNote] = useState(existing?.note ?? '')
+  const [district, setDistrict] = useState<string | null>(existing?.district ?? null)
+  const [more, setMore] = useState(!!existing)
+  const digits = phone.replace(/\D/g, '')
+  const duplicate = s.clients.some((c) => c.id !== clientId && c.phone.replace(/\D/g, '') === digits)
+  const budgetValid = [min, max].every((v) => !v || (Number.isFinite(Number(v)) && Number(v) >= 0)) && (!min || !max || Number(min) <= Number(max))
+  const roomsValid = !rooms || (Number.isInteger(Number(rooms)) && Number(rooms) > 0 && Number(rooms) <= 100)
+  const valid = name.trim().length > 1 && digits.length >= 9 && digits.length <= 15 && !duplicate && budgetValid && roomsValid
 
   const save = () => {
-    const b = budget !== null ? BUDGETS[intent][budget] : undefined
-    const id = newId('c')
-    s.setClients((cs) => [
-      {
-        id,
-        name: name.trim(),
-        phone: phone.trim(),
-        intent,
-        kind: 'Квартира',
-        budgetMin: b?.min,
-        budgetMax: b?.max,
-        district: district ?? undefined,
-        status: 'new',
-        source: 'Вручную',
-        history: [{ id: newId('h'), label: 'Клиент создан', when: 'только что' }],
-      },
-      ...cs,
-    ])
-    s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, bucket: 'today', time: 'сегодня' })
+    if (!valid) return
+    if (clientId && !existing) return
+    const id = existing?.id ?? newId('c')
+    const updated = {
+      ...existing, id, name: name.trim(), phone: phone.trim(), intent, kind,
+      budgetMin: min ? Number(min) : undefined, budgetMax: max ? Number(max) : undefined,
+      district: district ?? undefined, rooms: rooms ? Number(rooms) : undefined,
+      note: note.trim() || undefined, status: existing?.status ?? 'new' as const,
+      source: existing?.source ?? 'Вручную',
+      history: [{ id: newId('h'), label: existing ? 'Контакты и запрос обновлены' : 'Клиент создан', when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...(existing?.history ?? [])],
+    }
+    s.setClients((cs) => existing ? cs.map((c) => c.id === id ? updated : c) : [updated, ...cs])
+    if (!existing) s.addTask({ title: 'Первый звонок', kind: 'call', clientId: id, dueAt: relativeDate(0) })
     s.closeSheet()
-    s.push({ name: 'client', id })
-    s.notify('Клиент добавлен, задача на звонок создана')
+    if (!existing) s.push({ name: 'client', id })
+    s.notify(existing ? 'Клиент обновлён, подбор объектов пересчитан' : 'Клиент добавлен, задача на звонок создана')
   }
 
   return (
-    <SheetFrame title="Новый клиент" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} depth={depth}>
+    <SheetFrame title={existing ? 'Редактировать клиента' : 'Новый клиент'} onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
         <Field label="Имя">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Например, Азиз" autoFocus />
@@ -183,12 +208,16 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Field label="Телефон">
           <TextInput value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" type="tel" />
         </Field>
+        {duplicate && <p role="alert" className="text-[13px] text-destructive">Клиент с этим телефоном уже существует.</p>}
+        <Field label="Тип недвижимости"><ChoiceRow>{PROPERTY_KINDS.map((value) => <Chip key={value} active={kind === value} onClick={() => setKind(value)}>{value}</Chip>)}</ChoiceRow></Field>
         <Field label="Цель">
           <Segmented
             value={intent}
             onChange={(v) => {
               setIntent(v)
               setBudget(null)
+              setMin('')
+              setMax('')
             }}
             options={[
               { value: 'buy', label: 'Покупка' },
@@ -199,21 +228,31 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Field label="Бюджет">
           <ChoiceRow>
             {BUDGETS[intent].map((b, i) => (
-              <Chip key={b.label} active={budget === i} onClick={() => setBudget(budget === i ? null : i)}>
+              <Chip key={b.label} active={budget === i} onClick={() => { setBudget(budget === i ? null : i); setMin(budget === i ? '' : String(b.min ?? '')); setMax(budget === i ? '' : String(b.max ?? '')) }}>
                 {b.label}
               </Chip>
             ))}
           </ChoiceRow>
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={intent === 'rent' ? 'От, $/мес' : 'От, $'}><TextInput aria-label="Минимальный бюджет" value={min} inputMode="decimal" onChange={(e) => { setMin(e.target.value); setBudget(null) }} /></Field>
+          <Field label={intent === 'rent' ? 'До, $/мес' : 'До, $'}><TextInput aria-label="Максимальный бюджет" value={max} inputMode="decimal" onChange={(e) => { setMax(e.target.value); setBudget(null) }} /></Field>
+        </div>
+        {!budgetValid && <p role="alert" className="text-[13px] text-destructive">Укажите неотрицательный бюджет: «от» не больше «до».</p>}
         <button
           type="button"
           onClick={() => setMore((v) => !v)}
           aria-expanded={more}
           className="flex h-11 items-center gap-1 self-start px-4 text-[15px] font-medium"
         >
-          Район и детали
+          Район, комнаты и пожелания
           <ChevronDown className={cn('size-4 transition-transform', more && 'rotate-180')} aria-hidden />
         </button>
+        {more && <>
+          <Field label="Комнаты"><TextInput aria-label="Количество комнат" value={rooms} inputMode="numeric" onChange={(e) => setRooms(e.target.value)} placeholder="Неважно" /></Field>
+          {!roomsValid && <p role="alert" className="text-[13px] text-destructive">Количество комнат — целое число от 1 до 100.</p>}
+          <Field label="Пожелания"><TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ремонт, мебель, метро…" /></Field>
+        </>}
         {more && (
           <Field label="Район">
             <ChoiceRow>
@@ -228,49 +267,49 @@ function AddClient({ depth }: SheetProps<'addClient'>) {
         <Button size="lg" disabled={!valid} onClick={save} className="mt-2">
           Сохранить
         </Button>
-        <p className="-mt-2 text-center text-[12px] text-muted-foreground">Остальное можно дополнить позже</p>
+        <p className="-mt-2 text-center text-[12px] text-muted-foreground">{existing ? 'История, задачи и показы сохранятся' : 'После сохранения создадим задачу на первый звонок'}</p>
       </div>
     </SheetFrame>
   )
 }
 
-function AddProperty({ depth }: SheetProps<'addProperty'>) {
+function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
   const s = useStore()
-  const [op, setOp] = useState<'sale' | 'rent'>('sale')
-  const [kind, setKind] = useState<Property['kind']>('Квартира')
-  const [district, setDistrict] = useState<string | null>(null)
-  const [rooms, setRooms] = useState<number | null>(null)
-  const [price, setPrice] = useState('')
-  const [owner, setOwner] = useState('')
-  const valid = !!district && Number(price.replace(/\D/g, '')) > 0
+  const existing = s.properties.find((p) => p.id === propertyId)
+  const [op, setOp] = useState<'sale' | 'rent'>(existing?.op ?? 'sale')
+  const [kind, setKind] = useState<Property['kind']>(existing?.kind ?? 'Квартира')
+  const [district, setDistrict] = useState<string | null>(existing?.district ?? null)
+  const [rooms, setRooms] = useState<number | null>(existing?.rooms ?? null)
+  const [price, setPrice] = useState(existing ? String(existing.price) : '')
+  const [owner, setOwner] = useState(existing?.owner ?? '')
+  const [address, setAddress] = useState(existing?.address ?? '')
+  const [area, setArea] = useState(existing?.area ? String(existing.area) : '')
+  const amount = Number(price.replace(/\s/g, ''))
+  const areaValue = Number(area.replace(',', '.'))
+  const numericValid = Number.isFinite(amount) && amount >= 0 && (!area || (Number.isFinite(areaValue) && areaValue > 0))
+  const valid = !!district && numericValid && amount > 0
 
   const save = (draft = false) => {
-    const id = newId('p')
-    s.setProperties((ps) => [
-      {
-        id,
-        op,
-        kind,
-        district: district ?? 'Не указан',
-        address: 'Адрес уточняется',
-        price: Number(price.replace(/\D/g, '')) || 0,
-        rooms: rooms ?? undefined,
-        freshness: 'new',
-        checked: 'только что',
-        owner: owner || 'Не указан',
-        priceHistory: [{ label: 'окт', price: Number(price.replace(/\D/g, '')) || 0 }],
-        docs: [],
-        draft,
-      },
-      ...ps,
-    ])
+    if (!numericValid || (!draft && !valid)) return
+    if (propertyId && !existing) return
+    const id = existing?.id ?? newId('p')
+    const label = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', day: 'numeric', month: 'short', year: 'numeric' }).format(s.now)
+    const updated: Property = {
+      ...existing, id, op, kind, district: district ?? 'Не указан',
+      address: address.trim() || 'Адрес уточняется', price: amount,
+      area: area ? areaValue : undefined, rooms: rooms ?? undefined,
+      freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
+      owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft,
+      priceHistory: !existing ? [{ label, price: amount }] : existing.price === amount ? existing.priceHistory : [...existing.priceHistory, { label, price: amount }],
+    }
+    s.setProperties((ps) => existing ? ps.map((p) => p.id === id ? updated : p) : [updated, ...ps])
     s.closeSheet()
-    if (!draft) s.push({ name: 'property', id })
-    s.notify(draft ? 'Черновик сохранён' : 'Объект добавлен')
+    if (!existing && !draft) s.push({ name: 'property', id })
+    s.notify(draft ? 'Черновик сохранён' : existing ? 'Объект обновлён' : 'Объект добавлен')
   }
 
   return (
-    <SheetFrame title="Новый объект" onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
+    <SheetFrame title={existing ? 'Редактировать объект' : 'Новый объект'} onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
         <Segmented
           value={op}
@@ -282,7 +321,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
         />
         <Field label="Тип">
           <ChoiceRow>
-            {(['Квартира', 'Дом', 'Коммерция'] as const).map((k) => (
+            {PROPERTY_KINDS.map((k) => (
               <Chip key={k} active={kind === k} onClick={() => setKind(k)}>
                 {k}
               </Chip>
@@ -317,6 +356,9 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
             placeholder={op === 'sale' ? '85 000' : '600'}
           />
         </Field>
+        <Field label="Адрес"><TextInput value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Улица, дом" /></Field>
+        <Field label="Площадь, м²"><TextInput value={area} onChange={(e) => setArea(e.target.value)} inputMode="decimal" placeholder="Например, 65" /></Field>
+        {!numericValid && <p role="alert" className="text-[13px] text-destructive">Укажите корректную цену и положительную площадь.</p>}
         <Field label="Собственник" hint="Необязательно">
           <TextInput value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Имя или телефон" />
         </Field>
@@ -324,7 +366,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
           <Button size="lg" disabled={!valid} onClick={() => save()}>
             Сохранить объект
           </Button>
-          <Button size="lg" variant="ghost" onClick={() => save(true)}>
+          <Button size="lg" variant="ghost" disabled={!numericValid} onClick={() => save(true)}>
             Сохранить черновик
           </Button>
         </div>
@@ -333,12 +375,7 @@ function AddProperty({ depth }: SheetProps<'addProperty'>) {
   )
 }
 
-const WHEN = [
-  { label: 'Сегодня', bucket: 'today' as const, time: 'сегодня' },
-  { label: 'Завтра', bucket: 'later' as const, time: 'завтра' },
-  { label: 'Через 3 дня', bucket: 'later' as const, time: 'пн, 27 окт' },
-  { label: 'Через неделю', bucket: 'later' as const, time: '31 окт' },
-]
+const WHEN = ['Сегодня', 'Завтра', 'Через 3 дня', 'Через неделю'].map((label) => ({ label }))
 const TIMES = ['10:00', '12:00', '15:00', '18:00']
 const TASK_PRESETS = ['Перезвонить', 'Отправить подборку', 'Уточнить цену', 'Напомнить о показе']
 
@@ -349,13 +386,13 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   const [time, setTime] = useState(TIMES[2])
   const [cid, setCid] = useState(clientId)
   const save = () => {
+    if (!title.trim()) return
     s.addTask({
       title,
       kind: title.includes('звон') ? 'call' : 'message',
       clientId: cid,
       propertyId,
-      bucket: WHEN[when].bucket,
-      time: `${WHEN[when].time}, ${time}`,
+      dueAt: relativeDate([0, 1, 3, 7][when], time),
     })
     if (cid) s.addHistory(cid, `Задача: ${title}`)
     s.closeSheet()
@@ -412,7 +449,7 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   )
 }
 
-const DAY_OPTS = ['Сегодня', 'Завтра', 'Вс, 26', 'Пн, 27']
+const DAY_OPTS = ['Сегодня', 'Завтра', 'Через 2 дня', 'Через 3 дня']
 const SLOT_OPTS = ['10:00', '11:30', '14:00', '16:00', '18:30']
 
 function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
@@ -426,17 +463,18 @@ function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
     .filter((p) => p.freshness !== 'sold' && p.freshness !== 'archived')
     .map((p) => ({ p, score: c ? matchScore(c, p) : 0 }))
     .sort((a, b) => b.score - a.score)
-  const valid = cid && pid
+  const valid = !!c && c.status !== 'closed' && options.some(({ p }) => p.id === pid)
 
   const save = () => {
-    const p = s.properties.find((x) => x.id === pid)!
+    const p = options.find(({ p }) => p.id === pid)?.p
+    if (!valid || !p) return
     s.setShowings((ss) => [
       ...ss,
-      { id: newId('s'), clientId: cid, propertyId: pid, day, time: slot, status: 'pending', place: p.address },
+      { id: newId('s'), clientId: cid, propertyId: pid, startsAt: relativeDate(day, slot), status: 'pending', place: p.address },
     ])
     s.addHistory(cid, `Показ назначен: ${DAY_OPTS[day].toLowerCase()}, ${slot}`)
     s.closeSheet()
-    s.notify('Показ назначен — напомним клиенту')
+    s.notify('Показ назначен в демо. Уведомления не отправляются')
   }
 
   return (
@@ -542,7 +580,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Перезвонить позже',
       on: () =>
         finish('перезвонить позже', () => {
-          s.addTask({ title: 'Перезвонить', kind: 'call', clientId: c.id, bucket: 'later', time: 'завтра, 12:00' })
+          s.addTask({ title: 'Перезвонить', kind: 'call', clientId: c.id, dueAt: relativeDate(1, '12:00') })
           s.closeSheet()
           s.notify('Напомним завтра в 12:00')
         }),
@@ -551,7 +589,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Не ответил',
       on: () =>
         finish('не ответил', () => {
-          s.addTask({ title: 'Повторить звонок', kind: 'call', clientId: c.id, bucket: 'today', time: '18:00' })
+          s.addTask({ title: 'Повторить звонок', kind: 'call', clientId: c.id, dueAt: relativeDate(0, '18:00') })
           s.closeSheet()
           s.notify('Повторный звонок в 18:00')
         }),
@@ -560,7 +598,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
       label: 'Отправить подборку',
       on: () =>
         finish('отправить подборку', () => {
-          s.addTask({ title: 'Отправить подборку', kind: 'message', clientId: c.id, bucket: 'today', time: 'сегодня' })
+          s.addTask({ title: 'Отправить подборку', kind: 'message', clientId: c.id, dueAt: relativeDate(0) })
           s.closeSheet()
           s.notify('Задача: отправить подборку')
         }),
@@ -586,7 +624,7 @@ function CallSheet({ depth, clientId, taskId }: SheetProps<'call'>) {
           </div>
           <p className="mt-5 text-[24px] font-semibold">{c.name}</p>
           <p className="text-[15px] text-muted-foreground tabular-nums" role="status">
-            Вызов… {c.phone}
+            Демо звонка · {c.phone}
           </p>
           <p className="mt-3 text-center text-[13px] text-muted-foreground">
             {c.intent === 'buy' ? 'Покупка' : 'Аренда'} · {budgetLabel(c)}
@@ -631,11 +669,12 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
       title: result === 'Понравилось' ? 'Обсудить условия' : result === 'Думает' ? 'Перезвонить после показа' : 'Отправить подборку',
       kind: 'call',
       clientId: sh.clientId,
-      bucket: 'later',
-      time: 'завтра, 12:00',
+      propertyId: sh.propertyId,
+      dueAt: relativeDate(1, '12:00'),
     })
     s.closeSheet()
     s.notify('Итог сохранён, следующий шаг создан')
+    if (result === 'Понравилось') s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
   }
   return (
     <SheetFrame title="Итог показа" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
@@ -783,31 +822,35 @@ function ListingSheet({ depth, propertyId }: SheetProps<'listing'>) {
 function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
   const s = useStore()
   const d = s.deals.find((x) => x.id === dealId)!
-  const left = d.commission.amount - d.commission.received
+  const left = (Math.round(d.commission.amount * 100) - Math.round(d.commission.received * 100)) / 100
   const [value, setValue] = useState(String(left))
-  const n = Math.min(Number(value.replace(/\D/g, '')) || 0, left)
+  const cents = parsePayment(value)
+  const n = cents === null ? 0 : cents / 100
+  const valid = cents !== null && cents <= Math.round(left * 100)
   const save = () => {
-    const prev = d
-    const received = d.commission.received + n
+    if (!valid || cents === null || d.cancellation) return
     s.updateDeal(d.id, (x) => ({
       ...x,
-      commission: { ...x.commission, received, status: received >= x.commission.amount ? 'paid' : 'partial' },
-      history: [{ id: newId('e'), label: `Получено ${money(n)}`, when: 'только что' }, ...x.history],
+      commission: { ...x.commission, ...applyPayment(x.commission.amount, x.commission.received, cents) },
+      history: [{ id: newId('e'), label: `Получено ${money(n)}`, when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...x.history],
     }))
     s.closeSheet()
-    s.notify(`Оплата ${money(n)} отмечена`, () => s.updateDeal(d.id, prev))
+    s.notify(`Оплата ${money(n)} отмечена`)
   }
   return (
-    <SheetFrame title="Оплата комиссии" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!n} detent="auto" depth={depth}>
+    <SheetFrame title="Оплата комиссии" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} detent="auto" depth={depth}>
       <div className="flex flex-col gap-4 px-4 pt-2">
         <TextInput
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          inputMode="numeric"
+          inputMode="decimal"
           autoFocus
-          aria-label="Сумма"
+          aria-label="Сумма в USD"
+          aria-invalid={!valid}
+          aria-describedby="payment-help"
           className="h-16 text-center text-[32px] font-bold tabular-nums"
         />
+        <p id="payment-help" role={!valid ? 'alert' : undefined} className="text-center text-[13px] text-muted-foreground">{valid ? 'USD · запишите только фактически полученную сумму' : 'Введите сумму больше нуля, не выше остатка, максимум два знака после запятой'}</p>
         <div className="flex justify-center gap-2">
           <Chip active={n === left} onClick={() => setValue(String(left))}>
             Весь остаток
@@ -817,7 +860,7 @@ function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
           </Chip>
         </div>
         <p className="text-center text-[13px] text-muted-foreground tabular-nums">
-          Остаток {money(left)} · платит {d.commission.payer.toLowerCase()}
+          Оста��ок {money(left)} · платит {d.commission.payer.toLowerCase()}
         </p>
         <Button size="lg" disabled={!n} onClick={save}>
           Отметить получение
@@ -833,32 +876,33 @@ export function SheetHost() {
     <>
       {sheets.map((sheet, i) => {
         const key = `${sheet.type}-${i}`
-        const props = { ...sheet, depth: i } as never
         switch (sheet.type) {
           case 'add':
-            return <AddMenu key={key} {...props} />
+            return <AddMenu key={key} {...sheet} depth={i} />
           case 'search':
-            return <SearchSheet key={key} {...props} />
+            return <SearchSheet key={key} {...sheet} depth={i} />
+          case 'addDeal':
+            return <AddDeal key={key} {...sheet} depth={i} />
           case 'addClient':
-            return <AddClient key={key} {...props} />
+            return <AddClient key={key} {...sheet} depth={i} />
           case 'addProperty':
-            return <AddProperty key={key} {...props} />
+            return <AddProperty key={key} {...sheet} depth={i} />
           case 'addTask':
-            return <AddTask key={key} {...props} />
+            return <AddTask key={key} {...sheet} depth={i} />
           case 'addShowing':
-            return <AddShowing key={key} {...props} />
+            return <AddShowing key={key} {...sheet} depth={i} />
           case 'call':
-            return <CallSheet key={key} {...props} />
+            return <CallSheet key={key} {...sheet} depth={i} />
           case 'outcome':
-            return <OutcomeSheet key={key} {...props} />
+            return <OutcomeSheet key={key} {...sheet} depth={i} />
           case 'price':
-            return <PriceSheet key={key} {...props} />
+            return <PriceSheet key={key} {...sheet} depth={i} />
           case 'freshness':
-            return <FreshnessSheet key={key} {...props} />
+            return <FreshnessSheet key={key} {...sheet} depth={i} />
           case 'listing':
-            return <ListingSheet key={key} {...props} />
+            return <ListingSheet key={key} {...sheet} depth={i} />
           case 'payment':
-            return <PaymentSheet key={key} {...props} />
+            return <PaymentSheet key={key} {...sheet} depth={i} />
         }
       })}
     </>

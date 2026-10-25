@@ -1,3 +1,5 @@
+import { relativeDate } from './dates'
+
 export type Intent = 'buy' | 'rent'
 export type Op = 'sale' | 'rent'
 export type ClientStatus = 'new' | 'active' | 'contact' | 'closed'
@@ -36,8 +38,7 @@ export interface Task {
   kind: TaskKind
   clientId?: string
   propertyId?: string
-  bucket: Bucket
-  time: string
+  dueAt: string
   reason?: string
   done: boolean
 }
@@ -49,10 +50,12 @@ export interface DocItem {
   status: DocStatus
 }
 
+export const PROPERTY_KINDS = ['Квартира', 'Дом', 'Таунхаус', 'Дача', 'Участок', 'Офис', 'Торговое помещение', 'Склад', 'Гараж', 'Коммерция'] as const
+
 export interface Property {
   id: string
   op: Op
-  kind: 'Квартира' | 'Дом' | 'Коммерция'
+  kind: (typeof PROPERTY_KINDS)[number]
   district: string
   address: string
   price: number
@@ -61,6 +64,7 @@ export interface Property {
   floor?: number
   floors?: number
   image?: string
+  images?: string[]
   freshness: Freshness
   checked: string
   owner: string
@@ -73,8 +77,7 @@ export interface Showing {
   id: string
   clientId: string
   propertyId: string
-  day: number
-  time: string
+  startsAt: string
   status: ShowingStatus
   place: string
   outcome?: string
@@ -86,6 +89,7 @@ export interface Deal {
   propertyId: string
   type: Op
   stage: number
+  cancellation?: { reason: string; at: string }
   next: string
   commission: {
     amount: number
@@ -244,6 +248,18 @@ export const initialClients: Client[] = [
 
 export const initialProperties: Property[] = [
   {
+    id: 'p7', op: 'rent', kind: 'Офис', district: 'Мирабад', address: 'Демо · офис рядом с метро Ойбек',
+    price: 1200, area: 85, floor: 2, floors: 5, image: '/props/office.png',
+    images: ['/props/office.png', '/props/office-meeting.png'], freshness: 'new', checked: 'не проверено',
+    owner: 'Демо-собственник', priceHistory: [{ label: 'старт', price: 1200 }], docs: [],
+  },
+  {
+    id: 'p8', op: 'sale', kind: 'Таунхаус', district: 'Мирзо-Улугбек', address: 'Демо · жилой квартал',
+    price: 245000, area: 180, rooms: 4, floors: 2, image: '/props/townhouse.png',
+    images: ['/props/townhouse.png', '/props/townhouse-living.png'], freshness: 'new', checked: 'не проверено',
+    owner: 'Демо-собственник', priceHistory: [{ label: 'старт', price: 245000 }], docs: saleDocs(),
+  },
+  {
     id: 'p1',
     op: 'sale',
     kind: 'Квартира',
@@ -362,8 +378,7 @@ export const initialTasks: Task[] = [
     title: 'Перезвонить с вариантами',
     kind: 'call',
     clientId: 'c1',
-    bucket: 'overdue',
-    time: 'вчера, 19:00',
+    dueAt: relativeDate(-1, '19:00'),
     reason: 'Обещали вчера — клиент ждёт',
     done: false,
   },
@@ -372,8 +387,7 @@ export const initialTasks: Task[] = [
     title: 'Ответить на пропущенный',
     kind: 'call',
     clientId: 'c4',
-    bucket: 'today',
-    time: '08:42',
+    dueAt: relativeDate(0, '08:42'),
     reason: 'Пропущенный звонок, новый клиент',
     done: false,
   },
@@ -382,8 +396,7 @@ export const initialTasks: Task[] = [
     title: 'Подтвердить актуальность',
     kind: 'check',
     propertyId: 'p3',
-    bucket: 'today',
-    time: '12:00',
+    dueAt: relativeDate(0, '12:00'),
     reason: 'Не проверялся 24 дня',
     done: false,
   },
@@ -392,8 +405,7 @@ export const initialTasks: Task[] = [
     title: 'Отправить подборку',
     kind: 'message',
     clientId: 'c5',
-    bucket: 'today',
-    time: '17:30',
+    dueAt: relativeDate(0, '17:30'),
     done: false,
   },
   {
@@ -401,16 +413,15 @@ export const initialTasks: Task[] = [
     title: 'Уточнить цену у собственника',
     kind: 'call',
     propertyId: 'p4',
-    bucket: 'later',
-    time: 'завтра, 10:00',
+    dueAt: relativeDate(1, '10:00'),
     done: false,
   },
 ]
 
 export const initialShowings: Showing[] = [
-  { id: 's1', clientId: 'c2', propertyId: 'p2', day: 0, time: '15:00', status: 'pending', place: 'У подъезда, Буюк Ипак Йули 24' },
-  { id: 's2', clientId: 'c1', propertyId: 'p1', day: 1, time: '11:00', status: 'confirmed', place: '11-квартал, у Мега Планет' },
-  { id: 's3', clientId: 'c3', propertyId: 'p3', day: 0, time: '10:00', status: 'done', place: 'У ворот дома', outcome: 'Думает' },
+  { id: 's1', clientId: 'c2', propertyId: 'p2', startsAt: relativeDate(0, '15:00'), status: 'pending', place: 'У подъезда, Буюк Ипак Йули 24' },
+  { id: 's2', clientId: 'c1', propertyId: 'p1', startsAt: relativeDate(1, '11:00'), status: 'confirmed', place: '11-квартал, у Мега Планет' },
+  { id: 's3', clientId: 'c3', propertyId: 'p3', startsAt: relativeDate(0, '10:00'), status: 'done', place: 'У ворот дома', outcome: 'Думает' },
 ]
 
 export const initialDeals: Deal[] = [
@@ -513,36 +524,25 @@ export function initials(name: string) {
 export function propertyTitle(p: Property) {
   if (p.kind === 'Квартира') return `${p.rooms ?? ''}-комн. квартира`
   if (p.kind === 'Дом') return `Дом${p.area ? `, ${p.area} м²` : ''}`
-  return `Помещение${p.area ? `, ${p.area} м²` : ''}`
+  return `${p.kind === 'Коммерция' ? 'Помещение' : p.kind}${p.area ? `, ${p.area} м²` : ''}`
+}
+
+function matchCriteria(c: Client, p: Property) {
+  return [
+    { label: 'Тип', weight: 30, active: true, matches: p.kind === c.kind },
+    { label: 'Бюджет', weight: 35, active: c.budgetMin != null || c.budgetMax != null, matches: (c.budgetMin == null || p.price >= c.budgetMin) && (c.budgetMax == null || p.price <= c.budgetMax) },
+    { label: 'Район', weight: 25, active: !!c.district, matches: p.district === c.district },
+    { label: 'Комнаты', weight: 10, active: !!c.rooms, matches: p.rooms === c.rooms },
+  ].filter(rule => rule.active)
 }
 
 export function matchScore(c: Client, p: Property) {
-  if (p.op !== (c.intent === 'buy' ? 'sale' : 'rent') || p.freshness === 'sold' || p.freshness === 'archived') return 0
-  let score = 0
-  const reasons: string[] = []
-  if (p.kind === c.kind) {
-    score += 30
-    reasons.push('тип')
-  }
-  if (c.budgetMax && p.price <= c.budgetMax && p.price >= (c.budgetMin ?? 0) * 0.85) {
-    score += 35
-    reasons.push('бюджет')
-  }
-  if (c.district && p.district === c.district) {
-    score += 25
-    reasons.push('район')
-  }
-  if (c.rooms && p.rooms === c.rooms) {
-    score += 10
-    reasons.push('комнаты')
-  }
+  if (p.draft || p.kind !== c.kind || p.op !== (c.intent === 'buy' ? 'sale' : 'rent') || !['new', 'confirmed', 'recheck'].includes(p.freshness)) return 0
+  const rules = matchCriteria(c, p)
+  const score = Math.round(100 * rules.filter(rule => rule.matches).reduce((sum, rule) => sum + rule.weight, 0) / rules.reduce((sum, rule) => sum + rule.weight, 0))
   return score >= 55 ? score : 0
 }
 
 export function matchReasons(c: Client, p: Property) {
-  const r: string[] = []
-  if (c.district && p.district === c.district) r.push('Район')
-  if (c.budgetMax && p.price <= c.budgetMax) r.push('Бюджет')
-  if (c.rooms && p.rooms === c.rooms) r.push('Комнаты')
-  return r
+  return matchScore(c, p) ? matchCriteria(c, p).filter(rule => rule.matches).map(rule => rule.label) : []
 }
