@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ShortlistFollowUp } from './shortlist-follow-up'
 
 const homes = [
   { id: 'a', district: 'Юнусабад', rooms: 2, price: 82000, area: 58, balcony: true, quiet: true },
@@ -46,5 +47,6 @@ export function PropertySearch() {
       <button type="button" aria-pressed={selected.includes(home.id)} onClick={() => setSelected(items => items.includes(home.id) ? items.filter(id => id !== home.id) : [...items, home.id])} className="mt-4 min-h-12 w-full rounded-xl bg-black px-4 py-3 text-sm font-medium text-white">{selected.includes(home.id) ? 'Убрать из подборки' : 'В подборку'}</button>
     </article>)}
     {selected.length > 0 && <aside className="rounded-2xl bg-neutral-50 p-5"><h3 className="font-semibold">Ваша демо-подборка</h3><p className="mt-2 text-xs text-neutral-500">Сохраняется при смене фильтров, сбрасывается при выходе из сценария.</p><ul className="mt-3 divide-y divide-neutral-200">{homes.filter(home => selected.includes(home.id)).map(home => <li key={home.id} className="py-3 text-sm">{home.district} · {home.area} м² · {money(home.price)}<button type="button" aria-label={`Удалить объект ${home.id.toUpperCase()} из подборки`} onClick={() => setSelected(items => items.filter(id => id !== home.id))} className="block min-h-11 text-neutral-600 underline">Удалить</button></li>)}</ul></aside>}
+    {selected.length > 0 && <ShortlistFollowUp homes={homes.filter(home => selected.includes(home.id))} />}
   </section>
 }
