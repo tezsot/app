@@ -1,0 +1,11 @@
+'use client'
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { authClient } from '@/lib/auth-client'
+export default function SignIn() {
+ const router = useRouter(); const [signup, setSignup] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('')
+ return <main className="mx-auto max-w-md px-6 py-12"><Link href="/start" className="text-sm underline">Выбор режима</Link><h1 className="my-6 text-3xl font-semibold">{signup ? 'Ваше рабочее пространство' : 'Продолжить работу'}</h1><p className="mb-6 text-sm text-neutral-600">Вход нужен, чтобы сохранять ваш прогресс отдельно от демо.</p><form className="grid gap-4" onSubmit={async e => { e.preventDefault(); setBusy(true); setError(''); const data = new FormData(e.currentTarget); try { const credentials = { email: String(data.get('email')), password: String(data.get('password')) }; const response = signup ? await authClient.signUp.email({ ...credentials, name: String(data.get('name')) }) : await authClient.signIn.email(credentials); if (response.error) setError('Не удалось войти. Проверьте данные или попробуйте позже.'); else { router.push('/workspace'); router.refresh() } } catch { setError('Нет связи с сервером. Попробуйте ещё раз.') } finally { setBusy(false) } }}>
+ {signup && <label>Ваше имя<input name="name" required maxLength={100} autoComplete="name" className="mt-2 w-full rounded-xl border p-3" /></label>}
+ <label>Email<input name="email" type="email" required autoComplete="email" className="mt-2 w-full rounded-xl border p-3" /></label><label>Пароль<input name="password" type="password" minLength={8} maxLength={128} required autoComplete={signup ? 'new-password' : 'current-password'} className="mt-2 w-full rounded-xl border p-3" /></label><p role="alert" className="text-sm text-red-700">{error}</p><button disabled={busy} className="min-h-12 rounded-xl bg-black px-4 text-white disabled:opacity-50">{busy ? 'Подождите…' : signup ? 'Создать аккаунт' : 'Войти'}</button></form><button disabled={busy} onClick={() => {setSignup(!signup); setError('')}} className="mt-5 min-h-11 underline">{signup ? 'Уже есть аккаунт' : 'Создать аккаунт'}</button></main>
+}
