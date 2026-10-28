@@ -32,6 +32,7 @@ export function LeadInbox() {
   function open(lead?: Lead) { setEditing(lead?.id ?? 'new'); setDraft(lead ? { ...lead } : { ...empty }); setError(''); requestAnimationFrame(() => { formRef.current?.scrollIntoView({ behavior: 'instant', block: 'start' }); formRef.current?.querySelector('input')?.focus() }) }
   function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (!draft.name.trim() || !draft.request.trim() || !normalize(draft.contact)) { setError('Укажите имя, контакт и запрос — поля не могут состоять только из пробелов.'); return }
     if (duplicate) { setError('Такой контакт уже есть. Откройте существующее обращение ниже.'); return }
     if ((draft.next || draft.when) && (!draft.owner || !draft.next.trim() || !draft.when)) { setError('Для первого контакта укажите ответственного, действие и дату со временем.'); return }
     if (draft.when && (!Number.isFinite(Date.parse(draft.when)) || new Date(draft.when).getTime() <= Date.now())) { setError('Выберите будущее время первого контакта.'); return }
