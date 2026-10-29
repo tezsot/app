@@ -91,6 +91,7 @@ export interface Deal {
   stage: number
   cancellation?: { reason: string; at: string }
   partnerDraft?: { name: string; share: number; scope: string; access: string }
+  documents?: { id: string; title: string; revisions: { id: string; status: 'missing' | 'received' | 'review' | 'checked'; comment: string; at: string }[] }[]
   next: string
   commission: {
     amount: number
@@ -497,7 +498,7 @@ export const initialLegalSteps: LegalStep[] = [
   { id: 'l3', title: 'Проверить требования к обучению', detail: 'Объём и форма обязательной подготовки', source: LEGAL_SOURCE, done: false },
   { id: 'l4', title: 'Выбрать образовательную программу', detail: 'Сравните центры: формат, язык, стоимость', done: false },
   { id: 'l5', title: 'Подготовиться к экзамену', detail: 'Тренировка по темам и пробный тест', done: false },
-  { id: 'l6', title: 'Собрать документы', detail: 'Перечень по вашему статусу', done: false },
+  { id: 'l6', title: 'С��брать документы', detail: 'Перечень по вашему статусу', done: false },
   { id: 'l7', title: 'Подать заявление', detail: 'Через установленный официальный канал', source: 'https://my.gov.uz', done: false },
   { id: 'l8', title: 'Отследить результат', detail: 'Сроки и статус рассмотрения', done: false },
   { id: 'l9', title: 'Выполнять последующие требования', detail: 'Продление, отчётность — если применимо', done: false },

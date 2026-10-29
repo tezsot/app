@@ -1,6 +1,7 @@
 'use client'
 
 import { PartnerAgreement } from '@/components/partner-agreement'
+import { DealDocuments } from '@/components/deal-documents'
 
 import { ArrowRight, Building2, Check, Handshake, Wallet } from 'lucide-react'
 import { useState } from 'react'
@@ -259,6 +260,7 @@ export function DealDetail({ id }: { id: string }) {
           </div>
         </SheetFrame>
       </div>, document.body)}
+      <DealDocuments key={`documents-${d.id}`} deal={d} />
       <PartnerAgreement key={d.id} deal={d} />
       <Group header="Участники">
         <Row
