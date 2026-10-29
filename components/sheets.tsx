@@ -1,5 +1,7 @@
 'use client'
 
+import { ListingEditor } from '@/components/listing-editor'
+
 import { AddDeal } from '@/components/add-deal'
 import { parsePayment, applyPayment } from '@/lib/payments'
 
@@ -786,36 +788,10 @@ function FreshnessSheet({ depth, propertyId }: SheetProps<'freshness'>) {
 function ListingSheet({ depth, propertyId }: SheetProps<'listing'>) {
   const s = useStore()
   const p = s.properties.find((x) => x.id === propertyId)!
-  const [channel, setChannel] = useState<'tg' | 'olx'>('tg')
-  const text =
-    channel === 'tg'
-      ? `${propertyTitle(p)}, ${p.district}\n${p.area ? `${p.area} м² · ` : ''}${p.floor ? `${p.floor}/${p.floors} этаж` : ''}\nОриентир: ${p.address}\nЦена: ${money(p.price, p.op)}\n\nЗвоните: +998 90 000-11-22`
-      : `${p.op === 'sale' ? 'Продаётся' : 'Сдаётся'} ${propertyTitle(p).toLowerCase()} в районе ${p.district}. ${p.area ? `Площадь ${p.area} м². ` : ''}${p.floor ? `Этаж ${p.floor} из ${p.floors}. ` : ''}Ориентир: ${p.address}. Цена ${money(p.price, p.op)}. Без посредников при показе, документы готовы к проверке.`
   return (
-    <SheetFrame title="Объявление" onClose={s.closeSheet} detent="auto" depth={depth}>
-      <div className="flex flex-col gap-4 px-4 pt-2">
-        <Segmented
-          value={channel}
-          onChange={setChannel}
-          options={[
-            { value: 'tg', label: 'Telegram' },
-            { value: 'olx', label: 'OLX' },
-          ]}
-        />
-        <div className="rounded-[18px] bg-card p-4 text-[15px] leading-relaxed whitespace-pre-line">{text}</div>
-        <Button
-          size="lg"
-          icon={Copy}
-          onClick={() => {
-            navigator.clipboard?.writeText(text).catch(() => {})
-            s.closeSheet()
-            s.notify('Текст скопирован')
-          }}
-        >
-          Скопировать текст
-        </Button>
-      </div>
-    </SheetFrame>
+  <SheetFrame title="Объявление" onClose={s.closeSheet} detent="auto" depth={depth}>
+    <ListingEditor property={p} />
+  </SheetFrame>
   )
 }
 
