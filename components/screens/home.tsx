@@ -1,6 +1,8 @@
 'use client'
 
 import { clientNext } from '@/lib/client-next'
+import { useState } from 'react'
+import { HomeWorkflowLinks } from '@/components/home-workflow-links'
 
 import {
   Building2,
@@ -37,6 +39,7 @@ interface Attention {
 
 export function HomeScreen() {
   const s = useStore()
+  const [showAll, setShowAll] = useState(false)
   const client = (id?: string) => s.clients.find((c) => c.id === id)
   const property = (id?: string) => s.properties.find((p) => p.id === id)
 
@@ -51,9 +54,9 @@ export function HomeScreen() {
         tone: t.bucket === 'overdue' ? 'danger' : 'warning',
         title: c ? `${t.title}: ${c.name.split(' ')[0]}` : t.title,
         reason: t.reason ?? t.time,
-        action: 'Позвонить',
-        onAction: () => c && s.openSheet({ type: 'call', clientId: c.id, taskId: t.id }),
-        onOpen: () => c && s.push({ name: 'client', id: c.id }),
+        action: t.kind === 'call' && c ? 'Позвонить' : 'Открыть',
+        onAction: () => t.kind === 'call' && c ? s.openSheet({ type: 'call', clientId: c.id, taskId: t.id }) : s.push({ name: 'tasks' }),
+        onOpen: () => c ? s.push({ name: 'client', id: c.id }) : s.push({ name: 'tasks' }),
       })
     })
   s.showings
@@ -107,6 +110,13 @@ export function HomeScreen() {
       .map((sh) => ({ kind: 'showing' as const, time: sh.time, showing: sh })),
   ].sort((a, b) => Date.parse(a.kind === 'task' ? a.task.dueAt : a.showing.startsAt) - Date.parse(b.kind === 'task' ? b.task.dueAt : b.showing.startsAt))
 
+  const priority = { danger: 0, warning: 1, neutral: 2 } as Record<string, number>
+  attention.sort((a, b) => (priority[a.tone] ?? 3) - (priority[b.tone] ?? 3))
+  const next = today.find(item => item.kind === 'task'
+    ? !item.task.done && Date.parse(item.task.dueAt) >= s.now.getTime()
+    : ['scheduled', 'pending', 'confirmed'].includes(item.showing.status) && Date.parse(item.showing.startsAt) >= s.now.getTime())
+  const missingOutcomes = s.showings.filter(sh => sh.status === 'done' && !sh.outcome?.trim())
+
   const recheck = s.properties.filter((p) => p.freshness === 'recheck').length
   const legalDone = s.legal.filter((l) => l.done).length
   const recent = s.clients.flatMap((c) => c.history.slice(0, 1).map((h) => ({ ...h, client: c }))).slice(0, 3)
@@ -130,6 +140,12 @@ export function HomeScreen() {
       }
     >
       <p className="px-8 pb-4 text-[13px] text-muted-foreground">Демо · изменения сбрасываются при перезагрузке. Звонки и уведомления не отправляются.</p>
+      <Group header="Ближайшее действие · Ташкент">
+        {next ? <Row icon={CalendarClock} tone="dark" title={next.kind === 'task' ? next.task.title : 'Показ'} value={next.time}
+          subtitle={next.kind === 'task' ? client(next.task.clientId)?.name ?? 'Рабочая задача' : `${client(next.showing.clientId)?.name ?? 'Клиент'} · ${next.showing.place}`}
+          onClick={() => next.kind === 'task' ? (next.task.kind === 'call' && next.task.clientId ? s.openSheet({ type: 'call', clientId: next.task.clientId, taskId: next.task.id }) : s.push({ name: 'tasks' })) : s.push({ name: 'showings' })} />
+          : <Row icon={CalendarPlus} title="На сегодня больше ничего не назначено" subtitle="Просроченные дела — в очереди ниже" onClick={() => s.openSheet({ type: 'addTask' })} />}
+      </Group>
       <section className="px-4 pb-6" aria-labelledby="attention-h">
         <div className="flex items-end justify-between px-4 pb-2">
           <h2 id="attention-h" className="label-section">
@@ -149,7 +165,7 @@ export function HomeScreen() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {attention.map((a, i) => (
+            {(showAll ? attention : attention.slice(0, 4)).map((a, i) => (
               <div
                 key={a.id}
                 className="anim-rise flex items-center gap-3 rounded-[22px] bg-card py-3 pr-3 pl-4"
@@ -171,6 +187,8 @@ export function HomeScreen() {
         )}
       </section>
 
+      {attention.length > 4 && <div className="px-8 pb-6"><button className="min-h-11 text-sm font-medium underline" aria-expanded={showAll} onClick={() => setShowAll(!showAll)}>{showAll ? 'Свернуть' : `Показать остальные (${attention.length - 4})`}</button></div>}
+      {missingOutcomes.length > 0 && <Group header="После показа"><Row icon={CalendarClock} tone="warning" title={`${missingOutcomes.length} показа без результата`} subtitle="Запишите обратную связь и следующий шаг" onClick={() => s.push({ name: 'showings' })} /></Group>}
       <section aria-label="Быстрые действия" className="grid grid-cols-4 gap-2 px-4 pb-7">
         {[
           { icon: UserPlus, label: 'Клиент', on: () => s.openSheet({ type: 'addClient' }) },
@@ -272,6 +290,7 @@ export function HomeScreen() {
         </Group>
       )}
 
+      <HomeWorkflowLinks />
       <Group header="Легализация">
         <button
           type="button"
@@ -308,7 +327,7 @@ export function HomeScreen() {
 
       <p className="flex items-center justify-center gap-1.5 px-8 text-center text-[12px] text-muted-foreground">
         <ShieldCheck className="size-3.5" aria-hidden />
-        Данные видите только вы и ваш руководитель
+        Демонстрационные данные · командные права здесь не применяются
       </p>
     </Screen>
   )
