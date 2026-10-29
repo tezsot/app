@@ -1,5 +1,7 @@
 'use client'
 
+import { ClientSelection } from '@/components/client-selection'
+
 import {
   CalendarPlus,
   CircleAlert,
@@ -335,6 +337,8 @@ export function ClientDetail({ id }: { id: string }) {
           ))
         )}
       </Group>
+
+      <ClientSelection key={c.id} properties={matches.map(({ p }) => p)} />
 
       {(showings.length > 0 || deals.length > 0) && (
         <Group header="Показы и сделки">
