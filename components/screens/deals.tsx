@@ -1,5 +1,7 @@
 'use client'
 
+import { PartnerAgreement } from '@/components/partner-agreement'
+
 import { ArrowRight, Building2, Check, Handshake, Wallet } from 'lucide-react'
 import { useState } from 'react'
 import { SheetFrame } from '@/components/ios/sheet'
@@ -257,6 +259,7 @@ export function DealDetail({ id }: { id: string }) {
           </div>
         </SheetFrame>
       </div>, document.body)}
+      <PartnerAgreement key={d.id} deal={d} />
       <Group header="Участники">
         <Row
           leading={<Avatar name={c.name} size={30} />}

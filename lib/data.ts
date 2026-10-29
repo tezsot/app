@@ -90,6 +90,7 @@ export interface Deal {
   type: Op
   stage: number
   cancellation?: { reason: string; at: string }
+  partnerDraft?: { name: string; share: number; scope: string; access: string }
   next: string
   commission: {
     amount: number
