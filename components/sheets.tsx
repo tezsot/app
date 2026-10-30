@@ -1,6 +1,7 @@
 'use client'
 
 import { ListingEditor } from '@/components/listing-editor'
+import { PropertyPostImport } from '@/components/property-post-import'
 
 import { AddDeal } from '@/components/add-deal'
 import { parsePayment, applyPayment } from '@/lib/payments'
@@ -286,6 +287,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
   const [owner, setOwner] = useState(existing?.owner ?? '')
   const [address, setAddress] = useState(existing?.address ?? '')
   const [area, setArea] = useState(existing?.area ? String(existing.area) : '')
+  const [sourcePost, setSourcePost] = useState(existing?.sourcePost)
   const amount = Number(price.replace(/\s/g, ''))
   const areaValue = Number(area.replace(',', '.'))
   const numericValid = Number.isFinite(amount) && amount >= 0 && (!area || (Number.isFinite(areaValue) && areaValue > 0))
@@ -301,7 +303,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
       address: address.trim() || 'Адрес уточняется', price: amount,
       area: area ? areaValue : undefined, rooms: rooms ?? undefined,
       freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
-      owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft,
+      owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft, sourcePost,
       priceHistory: !existing ? [{ label, price: amount }] : existing.price === amount ? existing.priceHistory : [...existing.priceHistory, { label, price: amount }],
     }
     s.setProperties((ps) => existing ? ps.map((p) => p.id === id ? updated : p) : [updated, ...ps])
@@ -313,6 +315,15 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
   return (
     <SheetFrame title={existing ? 'Редактировать объект' : 'Новый объект'} onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
+        {!existing && <PropertyPostImport properties={s.properties} onApply={(fields, source) => {
+          if (fields.op) setOp(fields.op)
+          if (fields.district) setDistrict(fields.district)
+          if (fields.rooms) setRooms(fields.rooms)
+          if (fields.area) setArea(String(fields.area))
+          if (fields.price) setPrice(String(fields.price))
+          setSourcePost(source)
+        }} />}
+        {sourcePost && <details className="rounded-xl border border-border p-3"><summary className="cursor-pointer text-sm font-medium">Источник объявления</summary>{sourcePost.url && <a href={sourcePost.url} target="_blank" rel="noopener noreferrer" className="mt-2 block break-all text-sm underline">Открыть оригинал</a>}<p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">{sourcePost.text}</p><p className="mt-2 text-xs text-muted-foreground">Источник сохранится вместе с объектом в текущей демо-сессии.</p></details>}
         <Segmented
           value={op}
           onChange={setOp}

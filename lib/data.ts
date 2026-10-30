@@ -71,6 +71,7 @@ export interface Property {
   priceHistory: { label: string; price: number }[]
   docs: DocItem[]
   draft?: boolean
+  sourcePost?: { text: string; url?: string }
 }
 
 export interface Showing {
