@@ -352,65 +352,7 @@ const TEAM = [
   { name: 'Улугбек Назаров', clients: 4, deals: 1, overdue: 3 },
 ]
 
-export function AnalyticsScreen() {
-  const s = useStore()
-  const manager = s.role === 'manager'
-  const funnel = [
-    { label: 'Обращения', value: manager ? 48 : 19 },
-    { label: 'Показы', value: manager ? 22 : 8 },
-    { label: 'Переговоры', value: manager ? 11 : 4 },
-    { label: 'Закрыто', value: manager ? 6 : 2 },
-  ]
-  return (
-    <Screen title={manager ? 'Команда' : 'Статистика'} subtitle="Октябрь 2026" back onBack={s.pop}>
-      <div className="grid grid-cols-2 gap-2 px-4 pb-6">
-        {[
-          { label: 'Конверсия в сделку', value: manager ? '12,5%' : '10,5%' },
-          { label: 'Ожидаемая комиссия', value: manager ? '$18,4k' : '$4,9k' },
-          { label: 'Ср. время ответа', value: manager ? '42 мин' : '28 мин' },
-          { label: 'Просрочено', value: manager ? '4' : '1', warn: true },
-        ].map((k) => (
-          <div key={k.label} className="rounded-[22px] bg-card p-4">
-            <p className="text-[13px] leading-snug text-muted-foreground">{k.label}</p>
-            <p className={cn('mt-1 text-[24px] font-bold tabular-nums', k.warn && 'text-destructive')}>{k.value}</p>
-          </div>
-        ))}
-      </div>
-      <Group header="Воронка">
-        <div className="flex flex-col gap-3 p-4">
-          {funnel.map((f) => (
-            <div key={f.label}>
-              <div className="flex justify-between text-[14px]">
-                <span>{f.label}</span>
-                <span className="font-semibold tabular-nums">{f.value}</span>
-              </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-secondary">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${(f.value / funnel[0].value) * 100}%` }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </Group>
-      {manager ? (
-        <Group header="Агенты" footer="Персональные данные клиентов агентов скрыты — видны только метрики">
-          {TEAM.map((t) => (
-            <Row
-              key={t.name}
-              leading={<Avatar name={t.name} size={36} />}
-              title={t.name}
-              subtitle={`${t.clients} клиентов · ${t.deals} сделки`}
-              trailing={t.overdue > 0 ? <Badge kind="danger">{t.overdue} просрочено</Badge> : <Badge kind="success">В порядке</Badge>}
-            />
-          ))}
-        </Group>
-      ) : (
-        <Group footer="Командная аналитика доступна в роли руководителя (Настройки)">
-          <Row icon={Lock} title="Аналитика команды" subtitle="Только для руководителя" />
-        </Group>
-      )}
-    </Screen>
-  )
-}
+export { DealAnalytics as AnalyticsScreen } from '@/components/deal-analytics'
 
 export function SettingsScreen() {
   const s = useStore()
