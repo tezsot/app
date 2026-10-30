@@ -2,6 +2,7 @@
 
 import { ListingEditor } from '@/components/listing-editor'
 import { PropertyPostImport } from '@/components/property-post-import'
+import { BulkPropertyPosts } from '@/components/bulk-property-posts'
 
 import { AddDeal } from '@/components/add-deal'
 import { parsePayment, applyPayment } from '@/lib/payments'
@@ -300,7 +301,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
     const label = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', day: 'numeric', month: 'short', year: 'numeric' }).format(s.now)
     const updated: Property = {
       ...existing, id, op, kind, district: district ?? 'Не указан',
-      address: address.trim() || 'Адрес уточняется', price: amount,
+      address: address.trim() || 'Адрес уточняет��я', price: amount,
       area: area ? areaValue : undefined, rooms: rooms ?? undefined,
       freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
       owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft, sourcePost,
@@ -315,6 +316,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
   return (
     <SheetFrame title={existing ? 'Редактировать объект' : 'Новый объект'} onClose={s.closeSheet} onConfirm={() => save()} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
+        {!existing && <BulkPropertyPosts />}
         {!existing && <PropertyPostImport properties={s.properties} onApply={(fields, source) => {
           if (fields.op) setOp(fields.op)
           if (fields.district) setDistrict(fields.district)
