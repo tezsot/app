@@ -1,6 +1,7 @@
 'use client'
 
 import { ClientSelection } from '@/components/client-selection'
+import { ClientImport } from '@/components/client-import'
 
 import {
   CalendarPlus,
@@ -62,6 +63,7 @@ export function ClientsScreen() {
   const [q, setQ] = useState('')
   const [intent, setIntent] = useState('all')
   const [sort, setSort] = useState('priority')
+  const [importing, setImporting] = useState(false)
   const query = q.trim().toLowerCase()
   const phoneQuery = /^[+\d\s()-]+$/.test(query) ? query.replace(/\D/g, '') : ''
 
@@ -93,6 +95,8 @@ export function ClientsScreen() {
     nonext: s.clients.filter((c) => c.status !== 'closed' && !nextFor(c.id)).length,
   }
 
+  if (importing) return <ClientImport onClose={() => { setImporting(false); setView('all'); setQ(''); setIntent('all') }} />
+
   return (
     <Screen
       title="Клиенты"
@@ -100,6 +104,7 @@ export function ClientsScreen() {
     >
       <div className="px-4 pb-3">
         <SearchField value={q} onChange={setQ} placeholder="Имя, телефон, район" />
+        <button onClick={() => setImporting(true)} className="mt-3 flex min-h-11 w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 text-left"><span className="text-sm font-medium">Из таблицы — в клиенты</span><span className="text-xs text-muted-foreground">CSV / XLSX</span></button>
       </div>
       <ChipScroller>
         <Chip active={view === 'all'} onClick={() => setView('all')}>

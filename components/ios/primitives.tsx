@@ -85,7 +85,7 @@ export function Screen({
         </div>
       </header>
       <div
-        className="no-scrollbar flex-1 overflow-y-auto overscroll-contain"
+        className="no-scrollbar flex-1 overflow-y-auto overscroll-contain scroll-pt-[calc(var(--top)+64px)] scroll-pb-[calc(var(--bottom)+110px)]"
         onScroll={(e) => setScrolled(e.currentTarget.scrollTop > (hero ? 220 : 36))}
       >
         {hero}
