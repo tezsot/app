@@ -17,7 +17,7 @@ export function parsePropertyPost(text: string): PostFields {
   const rent = /аренд|сда[её]тся|ijara/i.test(text)
   const sale = /прода[её]тся|продажа|sotiladi/i.test(text)
   if (rent !== sale) result.op = rent ? 'rent' : 'sale'
-  const rooms = [...text.matchAll(/\b([1-9])\s*[-–]?\s*(?:комн|xonali)/gi)]
+  const rooms = [...text.matchAll(/\b([1-9])\s*[-–]?\s*(?:комн(?:атн(?:ая|ой|ые|ых))?|xonali)/gi)]
   if (rooms.length === 1) result.rooms = Number(rooms[0][1])
   const areas = [...text.matchAll(/\b(\d+(?:[.,]\d+)?)\s*(?:м²|м2|m²|m2|кв\.?\s*м)/gi)]
   if (areas.length === 1 && Number(areas[0][1].replace(',', '.')) > 0) result.area = Number(areas[0][1].replace(',', '.'))

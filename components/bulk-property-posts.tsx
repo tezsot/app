@@ -7,7 +7,8 @@ import { useStore } from '@/lib/store'
 
 const fingerprint = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase()
 function splitPosts(text: string) {
-  return text.split(/^\s*---+\s*$/m).map(part => part.trim()).filter(Boolean).map(part => {
+  const normalized = text.replace(/\\n/g, '\n').replace(/\\r/g, '\r')
+  return normalized.split(/^\s*---+\s*$/m).map(part => part.trim()).filter(Boolean).map(part => {
     const links = part.match(/https:\/\/[^\s<>]+/g) ?? []
     const urls = [...new Set(links.map(postUrl).filter((value): value is string => !!value))]
     const body = part.split('\n').filter(line => !postUrl(line.trim())).join('\n').trim()
@@ -45,7 +46,7 @@ export function BulkPropertyPosts() {
       <button type="button" disabled={!reviewed || !available.length} className="min-h-11 w-full rounded-xl bg-primary p-3 font-medium text-primary-foreground disabled:opacity-40" onClick={() => {
         if (saving.current || !reviewed || !available.length) return
         saving.current = true
-        const objects: Property[] = available.map(row => ({ id: crypto.randomUUID(), op: row.fields.op ?? 'sale', kind: 'Квартира', district: row.fields.district ?? 'Не указан', address: 'Не указан', rooms: row.fields.rooms ?? 0, area: row.fields.area, price: row.fields.price ?? 0, freshness: 'new', updated: 'Только что', images: [], owner: 'Не указан', docs: [], draft: true, sourcePost: { text: row.text, url: row.url } }))
+        const objects: Property[] = available.map(row => ({ id: crypto.randomUUID(), op: row.fields.op ?? 'sale', kind: 'Квартира', district: row.fields.district ?? 'Не указан', address: 'Не указан', rooms: row.fields.rooms ?? 0, area: row.fields.area, price: row.fields.price ?? 0, freshness: 'new', checked: 'Не проверен', images: [], owner: 'Не указан', priceHistory: [], docs: [], draft: true, sourcePost: { text: row.text, url: row.url } }))
         store.setProperties(current => [...objects, ...current])
         setCreated(objects.map(p => p.id)); setReviewed(false)
       }}>Добавить черновики · {available.length}</button></div>}
