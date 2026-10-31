@@ -692,7 +692,7 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
     if (result === 'Понравилось') s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
   }
   return (
-    <SheetFrame title="Итог показа" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
+    <SheetFrame title="Итог п��каза" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
       <div className="flex flex-col gap-2 px-4 pt-2">
         {results.map((r) => (
           <button
@@ -801,10 +801,17 @@ function FreshnessSheet({ depth, propertyId }: SheetProps<'freshness'>) {
 function ListingSheet({ depth, propertyId }: SheetProps<'listing'>) {
   const s = useStore()
   const p = s.properties.find((x) => x.id === propertyId)!
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
   return (
-  <SheetFrame title="Объявление" onClose={s.closeSheet} detent="auto" depth={depth}>
-    <ListingEditor property={p} />
-  </SheetFrame>
+    <SheetFrame title={confirmClose ? 'Удалить правки?' : 'Объявление'} onClose={() => confirmClose ? setConfirmClose(false) : dirty ? setConfirmClose(true) : s.closeSheet()} detent="auto" depth={depth}>
+      <div hidden={confirmClose}><ListingEditor property={p} onDirtyChange={setDirty} /></div>
+      {confirmClose && <div className="flex flex-col gap-4 px-4 pb-6 pt-2">
+        <p className="text-sm leading-relaxed text-muted-foreground">Вы изменили текст объявления. При закрытии эти правки будут удалены. Если текст нужен для публикации, вернитесь в редактор и скопируйте его.</p>
+        <button type="button" autoFocus onClick={() => setConfirmClose(false)} className="min-h-11 rounded-2xl bg-primary px-4 py-3 font-semibold text-primary-foreground">Продолжить редактирование</button>
+        <button type="button" onClick={s.closeSheet} className="min-h-11 rounded-2xl border border-border px-4 py-3 font-medium text-destructive">Удалить правки и закрыть</button>
+      </div>}
+    </SheetFrame>
   )
 }
 

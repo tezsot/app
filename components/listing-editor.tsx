@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { type Property, money, propertyTitle } from '@/lib/data'
 import { Segmented } from '@/components/ios/primitives'
 import { Building2, Copy, Info, ShieldCheck, AlertCircle } from 'lucide-react'
@@ -12,7 +12,7 @@ function template(p: Property, lang: 'ru' | 'uz', channel: 'tg' | 'olx') {
   const lines = [title, p.district, p.rooms ? `${uz ? 'Xonalar' : 'Комнат'}: ${p.rooms}` : '', p.area ? `${uz ? 'Maydon' : 'Площадь'}: ${p.area} m²` : '', p.floor ? `${uz ? 'Qavat' : 'Этаж'}: ${p.floor}${p.floors ? ` / ${p.floors}` : ''}` : '', `${uz ? 'Narx' : 'Цена'}: ${new Intl.NumberFormat(uz ? 'uz-UZ' : 'ru-RU').format(p.price)} USD${p.op === 'rent' ? uz ? ' / oy' : ' / месяц' : ''}`].filter(Boolean)
   return lines.join(channel === 'tg' ? '\n' : '. ') + (channel === 'olx' ? '.' : '')
 }
-export function ListingEditor({ property }: { property: Property }) {
+export function ListingEditor({ property, onDirtyChange }: { property: Property; onDirtyChange?: (dirty: boolean) => void }) {
   const [lang, setLang] = useState<'ru' | 'uz'>('ru')
   const [channel, setChannel] = useState<'tg' | 'olx'>('tg')
   const [text, setText] = useState(() => template(property, 'ru', 'tg'))
@@ -24,6 +24,7 @@ export function ListingEditor({ property }: { property: Property }) {
   const [imageFailed, setImageFailed] = useState(false)
   const image = property.image || property.images?.[0]
   const dirty = text !== template(property, applied.lang, applied.channel)
+  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
   const pending = lang !== applied.lang || channel !== applied.channel
   function generate() { setText(template(property, lang, channel)); setApplied({ lang, channel }); setConfirm(false); setReviewed(false); setMessage('Шаблон обновлён. Проверьте характеристики перед копированием.') }
   const button = 'min-h-11 rounded-xl border border-border px-4 py-2 text-sm font-medium disabled:opacity-40'
