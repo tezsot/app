@@ -401,6 +401,10 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   const [when, setWhen] = useState(0)
   const [time, setTime] = useState(TIMES[2])
   const [cid, setCid] = useState(clientId)
+  const [choosingClient, setChoosingClient] = useState(false)
+  const [query, setQuery] = useState('')
+  const selectedClient = s.clients.find(c => c.id === cid)
+  const matchingClients = s.clients.filter(c => c.status !== 'closed' && `${c.name} ${c.phone}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   const save = () => {
     if (!title.trim()) return
     s.addTask({
@@ -414,6 +418,16 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
     s.closeSheet()
     s.notify('Задача создана')
   }
+  if (choosingClient) return <SheetFrame title="Клиент задачи" onClose={() => setChoosingClient(false)} depth={depth}>
+    <div className="flex flex-col gap-4 px-4 pb-6">
+      <button type="button" onClick={() => setChoosingClient(false)} className="min-h-11 self-start text-sm font-medium text-primary">Назад к задаче</button>
+      <SearchField value={query} onChange={setQuery} placeholder="Имя или телефон" />
+      <button type="button" aria-pressed={!cid} onClick={() => { setCid(undefined); setChoosingClient(false) }} className="flex min-h-16 items-center justify-between rounded-2xl border border-border bg-card p-4 text-left"><span>Без клиента</span>{!cid && <Badge>Выбрано</Badge>}</button>
+      <p role="status" className="text-xs text-muted-foreground">Найдено клиентов: {matchingClients.length} · без закрытых</p>
+      {matchingClients.map(c => <button type="button" key={c.id} aria-pressed={cid === c.id} onClick={() => { setCid(c.id); setChoosingClient(false) }} className="flex min-h-20 items-center gap-3 rounded-[22px] border border-border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-primary"><Avatar name={c.name} size={44} /><span className="flex min-w-0 flex-1 flex-col gap-1"><span className="font-medium">{c.name}</span><span className="text-xs text-muted-foreground">{c.phone}</span></span>{cid === c.id && <Badge>Выбран</Badge>}</button>)}
+      {!matchingClients.length && <div className="flex flex-col gap-3 rounded-2xl bg-secondary p-5 text-center"><p className="font-medium">{query ? 'Ничего не найдено' : 'Нет активных клиентов'}</p><p className="text-sm text-muted-foreground">{query ? 'Попробуйте другое имя или номер телефона.' : 'Можно создать задачу без привязки к клиенту.'}</p>{query && <Button variant="secondary" onClick={() => setQuery('')}>Сбросить поиск</Button>}</div>}
+    </div>
+  </SheetFrame>
   return (
     <SheetFrame title="Новая задача" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!title.trim()} detent="auto" depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
@@ -428,17 +442,8 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
           </ChoiceRow>
         </Field>
         {!clientId && !propertyId && (
-          <Field label="Клиент">
-            <ChoiceRow>
-              {s.clients
-                .filter((c) => c.status !== 'closed')
-                .slice(0, 5)
-                .map((c) => (
-                  <Chip key={c.id} active={cid === c.id} onClick={() => setCid(cid === c.id ? undefined : c.id)}>
-                    {c.name.split(' ')[0]}
-                  </Chip>
-                ))}
-            </ChoiceRow>
+          <Field label="Клиент · необязательно">
+            <button type="button" aria-label="Выбрать клиента задачи" onClick={() => { setQuery(''); setChoosingClient(true) }} className="flex min-h-20 w-full items-center gap-3 rounded-[22px] border border-border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-primary"><Avatar name={selectedClient?.name ?? '?'} size={44} /><span className="flex min-w-0 flex-1 flex-col gap-1"><span className="font-medium">{selectedClient?.name ?? 'Без привязки к клиенту'}</span><span className="text-xs text-muted-foreground">{selectedClient?.phone ?? 'Выберите, кому нужен следующий контакт'}</span></span><span className="text-xs text-primary">{selectedClient ? 'Изменить' : 'Выбрать'}</span></button>
           </Field>
         )}
         <Field label="Когда">
