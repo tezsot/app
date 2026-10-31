@@ -5,6 +5,7 @@ import { PropertyPostImport } from '@/components/property-post-import'
 import { BulkPropertyPosts } from '@/components/bulk-property-posts'
 
 import { AddDeal } from '@/components/add-deal'
+import { DealPropertyOption } from '@/components/deal-property-option'
 import { parsePayment, applyPayment } from '@/lib/payments'
 
 import { relativeDate } from '@/lib/dates'
@@ -473,9 +474,12 @@ function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
   const [pid, setPid] = useState(propertyId ?? '')
   const [day, setDay] = useState(1)
   const [slot, setSlot] = useState(SLOT_OPTS[0])
+  const [picker, setPicker] = useState<'client' | 'property' | null>(null)
+  const [query, setQuery] = useState('')
+  const openPicker = (type: 'client' | 'property') => { setQuery(''); setPicker(type) }
   const c = s.clients.find((x) => x.id === cid)
   const options = s.properties
-    .filter((p) => p.freshness !== 'sold' && p.freshness !== 'archived')
+    .filter((p) => !p.draft && p.freshness !== 'sold' && p.freshness !== 'archived')
     .map((p) => ({ p, score: c ? matchScore(c, p) : 0 }))
     .sort((a, b) => b.score - a.score)
   const valid = !!c && c.status !== 'closed' && options.some(({ p }) => p.id === pid)
@@ -492,55 +496,28 @@ function AddShowing({ depth, clientId, propertyId }: SheetProps<'addShowing'>) {
     s.notify('Показ назначен в демо. Уведомления не отправляются')
   }
 
+  const selectedProperty = options.find(({ p }) => p.id === pid)?.p
+  const search = query.trim().toLocaleLowerCase()
+  const clients = s.clients.filter(x => x.status !== 'closed' && `${x.name} ${x.phone}`.toLocaleLowerCase().includes(search))
+  const filtered = options.filter(({ p }) => `${propertyTitle(p)} ${p.district} ${p.address} ${p.price}`.toLocaleLowerCase().includes(search))
+  if (picker) return <SheetFrame title={picker === 'client' ? 'Выберите клиента' : 'Выберите объект'} onClose={() => setPicker(null)} depth={depth}>
+    <div className="flex flex-col gap-4 px-4 pb-6">
+      <button type="button" onClick={() => setPicker(null)} className="min-h-11 self-start text-sm font-medium text-primary">Назад к показу</button>
+      <SearchField value={query} onChange={setQuery} placeholder={picker === 'client' ? 'Имя или телефон' : 'Район, адрес или цена'} />
+      <p role="status" className="text-xs text-muted-foreground">{picker === 'client' ? `${clients.length} клиентов` : `${filtered.length} объектов${c ? ' · сначала наиболее подходящие' : ''}. Черновики и недоступные объекты скрыты.`}</p>
+      {picker === 'client' ? clients.map(x => <button type="button" key={x.id} aria-pressed={cid === x.id} onClick={() => { setCid(x.id); setPicker(null) }} className="flex min-h-20 items-center gap-3 rounded-[22px] border border-border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-primary"><Avatar name={x.name} size={44} /><span className="flex min-w-0 flex-1 flex-col gap-1"><span className="font-medium">{x.name}</span><span className="text-xs text-muted-foreground">{x.phone} · {x.intent === 'rent' ? 'Аренда' : 'Покупка'}</span></span>{cid === x.id && <Badge>Выбран</Badge>}</button>) : filtered.map(({ p, score }) => <div key={p.id} className="flex flex-col gap-1"><DealPropertyOption property={p} selected={pid === p.id} onClick={() => { setPid(p.id); setPicker(null) }} />{c && <p className="px-3 text-xs text-muted-foreground">Совпадение с запросом: {score}%</p>}</div>)}
+      {(picker === 'client' ? !clients.length : !filtered.length) && <div className="flex flex-col gap-3 rounded-2xl bg-secondary p-5 text-center"><p className="font-medium">Ничего не найдено</p><p className="text-sm text-muted-foreground">{query ? 'Попробуйте другое имя, район или адрес.' : 'Добавьте доступную запись в соответствующем разделе.'}</p>{query && <Button variant="secondary" onClick={() => setQuery('')}>Сбросить поиск</Button>}</div>}
+    </div>
+  </SheetFrame>
   return (
     <SheetFrame title="Новый показ" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} depth={depth}>
       <div className="flex flex-col gap-5 pt-2">
         <div className="px-4">
           <Field label="Клиент">
-            <ChoiceRow>
-              {s.clients
-                .filter((x) => x.status !== 'closed')
-                .map((x) => (
-                  <Chip key={x.id} active={cid === x.id} onClick={() => setCid(x.id)}>
-                    {x.name.split(' ')[0]}
-                  </Chip>
-                ))}
-            </ChoiceRow>
+            <button type="button" aria-label="Выбрать клиента показа" onClick={() => openPicker('client')} className="flex min-h-20 w-full items-center gap-3 rounded-[22px] border border-border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-primary"><Avatar name={c?.name ?? '?'} size={44} /><span className="flex flex-1 flex-col gap-1"><span className="font-medium">{c?.name ?? 'Выберите клиента'}</span><span className="text-xs text-muted-foreground">{c?.phone ?? 'Поиск по имени или телефону'}</span></span><span className="text-xs text-primary">{c ? 'Изменить' : 'Выбрать'}</span></button>
           </Field>
         </div>
-        <Group header={c ? 'Объект · по совпадению' : 'Объект'} className="pb-0">
-          {options.slice(0, 4).map(({ p, score }) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setPid(p.id)}
-              aria-pressed={pid === p.id}
-              className="group/row flex w-full items-center gap-3 pl-4 text-left active:bg-accent"
-            >
-              {p.image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.image} alt="" className="size-11 shrink-0 rounded-[10px] object-cover" />
-              )}
-              <span className="flex min-w-0 flex-1 items-center gap-2 self-stretch border-b border-separator py-2.5 pr-4 group-last/row:border-b-0">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px] font-medium">{propertyTitle(p)}</span>
-                  <span className="block truncate text-[13px] text-muted-foreground">
-                    {money(p.price, p.op)} · {p.district}
-                  </span>
-                </span>
-                {score > 0 && <Badge kind="success">{score}%</Badge>}
-                <span
-                  className={cn(
-                    'flex size-6 shrink-0 items-center justify-center rounded-full',
-                    pid === p.id ? 'bg-primary' : 'ring-1 ring-muted-foreground/40',
-                  )}
-                >
-                  {pid === p.id && <span className="size-2 rounded-full bg-primary-foreground" />}
-                </span>
-              </span>
-            </button>
-          ))}
-        </Group>
+        <div className="px-4"><Field label="Объект">{selectedProperty ? <DealPropertyOption key={selectedProperty.id} property={selectedProperty} summary onClick={() => openPicker('property')} /> : <button type="button" onClick={() => openPicker('property')} className="flex min-h-24 w-full items-center gap-3 rounded-[22px] border border-border bg-card p-4 text-left focus-visible:outline-2 focus-visible:outline-primary"><Building2 className="size-8 shrink-0 text-muted-foreground" aria-hidden /><span className="flex flex-col gap-1"><span className="font-medium">Выберите объект</span><span className="text-xs text-muted-foreground">Фото, адрес и цена · {options.length} доступно</span></span></button>}</Field></div>
         <div className="flex flex-col gap-5 px-4">
           <Field label="День">
             <ChoiceRow>
@@ -692,7 +669,7 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
     if (result === 'Понравилось') s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
   }
   return (
-    <SheetFrame title="Итог п��каза" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
+    <SheetFrame title="Итог п����каза" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
       <div className="flex flex-col gap-2 px-4 pt-2">
         {results.map((r) => (
           <button
