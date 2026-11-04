@@ -304,7 +304,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
     const label = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', day: 'numeric', month: 'short', year: 'numeric' }).format(s.now)
     const updated: Property = {
       ...existing, id, op, kind, district: district ?? 'Не указан',
-      address: address.trim() || 'Адрес уточняет��я', price: amount,
+      address: address.trim() || 'Адрес у��очняет��я', price: amount,
       area: area ? areaValue : undefined, rooms: rooms ?? undefined,
       freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
       owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft, sourcePost,
@@ -396,10 +396,27 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
 const WHEN = ['Сегодня', 'Завтра', 'Через 3 дня', 'Через неделю'].map((label) => ({ label }))
 const TIMES = ['10:00', '12:00', '15:00', '18:00']
 const TASK_PRESETS = ['Перезвонить', 'Отправить подборку', 'Уточнить цену', 'Напомнить о показе']
+const PROPERTY_TASK_PRESETS = [
+  { title: 'Уточнить цену у собственника', detail: 'Проверить стоимость и возможность торга.' },
+  { title: 'Подтвердить доступность объекта', detail: 'Уточнить, не продан и не сдан ли объект.' },
+  { title: 'Позвонить собственнику', detail: 'Согласовать условия и следующий контакт.' },
+  { title: 'Обновить фотографии', detail: 'Снять комнаты, планировку и состояние объекта.' },
+  { title: 'Проверить документы', detail: 'Уточнить комплект документов и недостающие сведения.' },
+  { title: 'Подготовить объявление', detail: 'Проверить описание, характеристики и цену.' },
+  { title: 'Согласовать доступ для показа', detail: 'Уточнить время, ключи и контакт встречающего.' },
+  { title: 'Обновить характеристики объекта', detail: 'Перепроверить площадь, этаж и комплектацию.' },
+]
 
 function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   const s = useStore()
-  const [title, setTitle] = useState(TASK_PRESETS[0])
+  const [title, setTitle] = useState(propertyId ? PROPERTY_TASK_PRESETS[0].title : TASK_PRESETS[0])
+  const [choosingTemplate, setChoosingTemplate] = useState(false)
+  const [replacement, setReplacement] = useState<string | null>(null)
+  const property = s.properties.find(p => p.id === propertyId)
+  const chooseTemplate = (next: string) => {
+    if (title.trim() && !PROPERTY_TASK_PRESETS.some(p => p.title === title) && title !== next) { setReplacement(next); return }
+    setTitle(next); setChoosingTemplate(false)
+  }
   const [when, setWhen] = useState(0)
   const [time, setTime] = useState(TIMES[2])
   const [cid, setCid] = useState(clientId)
@@ -420,6 +437,12 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
     s.closeSheet()
     s.notify('Задача создана')
   }
+  if (choosingTemplate) return <SheetFrame title="Задания по объекту" onClose={() => { setChoosingTemplate(false); setReplacement(null) }} depth={depth}>
+    <div className="flex flex-col gap-3 px-4 pb-6"><button type="button" className="min-h-11 self-start text-sm font-medium text-primary" onClick={() => { setChoosingTemplate(false); setReplacement(null) }}>Назад к задаче</button>
+      <p className="text-sm text-muted-foreground">Выберите один шаг. Дату и время можно настроить перед созданием.</p>
+      {replacement ? <div className="flex flex-col gap-3 rounded-2xl border border-border p-4"><p className="font-medium">Заменить ваш текст?</p><p className="text-sm text-muted-foreground">Новый текст: {replacement}. Дата и время останутся прежними.</p><Button onClick={() => { setTitle(replacement); setReplacement(null); setChoosingTemplate(false) }}>Заменить текст</Button><Button variant="secondary" onClick={() => setReplacement(null)}>Оставить мой текст</Button></div> : PROPERTY_TASK_PRESETS.map(p => <button key={p.title} type="button" aria-pressed={title === p.title} onClick={() => chooseTemplate(p.title)} className={cn('flex min-h-20 flex-col gap-1 rounded-[22px] border p-4 text-left focus-visible:outline-2 focus-visible:outline-primary', title === p.title ? 'border-primary bg-primary/5' : 'border-border bg-card')}><span className="text-sm font-semibold">{p.title}</span><span className="text-xs leading-relaxed text-muted-foreground">{p.detail}</span></button>)}
+    </div>
+  </SheetFrame>
   if (choosingClient) return <SheetFrame title="Клиент задачи" onClose={() => setChoosingClient(false)} depth={depth}>
     <div className="flex flex-col gap-4 px-4 pb-6">
       <button type="button" onClick={() => setChoosingClient(false)} className="min-h-11 self-start text-sm font-medium text-primary">Назад к задаче</button>
@@ -433,15 +456,16 @@ function AddTask({ depth, clientId, propertyId }: SheetProps<'addTask'>) {
   return (
     <SheetFrame title="Новая задача" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!title.trim()} detent="auto" depth={depth}>
       <div className="flex flex-col gap-5 px-4 pt-2">
+        {property && <div className="flex items-center gap-3 rounded-2xl bg-secondary p-3">{(property.image || property.images?.[0]) && <img src={property.image || property.images?.[0]} alt="" className="size-16 shrink-0 rounded-xl object-cover" />}<div className="min-w-0"><p className="text-xs text-muted-foreground">Задача по объекту</p><p className="text-sm font-medium">{propertyTitle(property)}</p><p className="truncate text-xs text-muted-foreground">{property.district} · {property.address}</p></div></div>}
         <Field label="Что сделать">
-          <TextInput value={title} onChange={(e) => setTitle(e.target.value)} />
-          <ChoiceRow>
+          <TextInput aria-label="Что сделать" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          {propertyId ? <button type="button" onClick={() => setChoosingTemplate(true)} className="min-h-11 text-left text-sm font-medium text-primary">Выбрать из 8 заданий по объекту</button> : <ChoiceRow>
             {TASK_PRESETS.map((p) => (
               <Chip key={p} active={title === p} onClick={() => setTitle(p)}>
                 {p}
               </Chip>
             ))}
-          </ChoiceRow>
+          </ChoiceRow>}
         </Field>
         {!clientId && !propertyId && (
           <Field label="Клиент · необязательно">
