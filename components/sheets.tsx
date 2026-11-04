@@ -90,6 +90,11 @@ function AddMenu({ depth }: SheetProps<'add'>) {
 function SearchSheet({ depth }: SheetProps<'search'>) {
   const s = useStore()
   const [q, setQ] = useState('')
+  return <SheetFrame title="Поиск" onClose={s.closeSheet} depth={depth}><div className="px-4 pt-1 pb-4"><SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, задачи, сделки" autoFocus /></div><GlobalSearchResults q={q} /></SheetFrame>
+}
+
+export function GlobalSearchResults({ q, onNavigate = () => {} }: { q: string; onNavigate?: () => void }) {
+  const s = useStore()
   const ql = q.toLocaleLowerCase('ru').trim().replace(/ё/g, 'е')
   const matches = (text: string) => ql.split(/\s+/).every((word) => text.toLocaleLowerCase('ru').replace(/ё/g, 'е').includes(word))
   const phoneQuery = /^[+\d\s()-]+$/.test(ql) ? ql.replace(/\D/g, '') : ''
@@ -104,10 +109,7 @@ function SearchSheet({ depth }: SheetProps<'search'>) {
   const deals = ql ? s.deals.filter((d) => matches(`${d.id} ${d.next} ${relatedText(d.clientId, d.propertyId)}`)) : []
   const total = clients.length + props.length + tasks.length + deals.length
   return (
-    <SheetFrame title="Поиск" onClose={s.closeSheet} depth={depth}>
-      <div className="px-4 pt-1 pb-4">
-        <SearchField value={q} onChange={setQ} placeholder="Клиенты, объекты, задачи, сделки" autoFocus />
-      </div>
+    <div onClick={(event) => { if ((event.target as HTMLElement).closest('button')) onNavigate() }}>
       {clients.length > 0 && (
         <Group header={ql ? 'Клиенты' : 'Недавние'}>
           {clients.map((c) => (
@@ -146,7 +148,7 @@ function SearchSheet({ depth }: SheetProps<'search'>) {
           Ничего не найдено по «{q}». Проверьте написание или ищите по району.
         </p>
       )}
-    </SheetFrame>
+    </div>
   )
 }
 
