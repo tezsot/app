@@ -658,24 +658,38 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
   const sh = s.showings.find((x) => x.id === showingId)!
   const [result, setResult] = useState<string | null>(null)
   const results = ['Понравилось', 'Думает', 'Не подошло', 'Хочет ещё варианты']
+  const [followUp, setFollowUp] = useState(true)
+  const [taskTitle, setTaskTitle] = useState<string | null>(null)
+  const [day, setDay] = useState('tomorrow')
+  const [slot, setSlot] = useState('12:00')
+  const [startDeal, setStartDeal] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const client = s.clients.find(c => c.id === sh.clientId)
+  const property = s.properties.find(p => p.id === sh.propertyId)
+  const suggestedTitle = result === 'Понравилось' ? 'Обсудить условия' : result === 'Думает' ? 'Перезвонить после показа' : 'Отправить подборку'
+  const title = taskTitle ?? suggestedTitle
+  const canSave = !!result && !saved && (!followUp || !!title.trim())
   const save = () => {
-    if (!result) return
+    if (!canSave || !result) return
+    setSaved(true)
     s.updateShowing(sh.id, { status: 'done', outcome: result })
     s.addHistory(sh.clientId, `Показ проведён: ${result.toLowerCase()}`)
-    s.addTask({
-      title: result === 'Понравилось' ? 'Обсудить условия' : result === 'Думает' ? 'Перезвонить после показа' : 'Отправить подборку',
-      kind: 'call',
+    if (followUp) s.addTask({
+      title: title.trim(),
+      kind: result === 'Понравилось' || result === 'Думает' ? 'call' : 'message',
       clientId: sh.clientId,
       propertyId: sh.propertyId,
-      dueAt: relativeDate(1, '12:00'),
+      dueAt: relativeDate(day === 'today' ? 0 : day === 'tomorrow' ? 1 : 2, slot),
     })
     s.closeSheet()
-    s.notify('Итог сохранён, следующий шаг создан')
-    if (result === 'Понравилось') s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
+    s.notify(followUp ? 'Итог сохранён, задача создана' : 'Итог показа сохранён')
+    if (result === 'Понравилось' && startDeal) s.openSheet({ type: 'addDeal', clientId: sh.clientId, propertyId: sh.propertyId })
   }
   return (
-    <SheetFrame title="Итог п����каза" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!result} detent="auto" depth={depth}>
-      <div className="flex flex-col gap-2 px-4 pt-2">
+    <SheetFrame title="Итог показа" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!canSave} depth={depth}>
+      <div className="flex flex-col gap-3 px-4 pb-6 pt-2">
+        <div className="flex items-center gap-3 rounded-2xl bg-secondary p-4"><Avatar name={client?.name ?? '?'} size={44} /><div className="min-w-0"><p className="font-medium">{client?.name ?? 'Клиент не найден'}</p><p className="mt-1 text-xs text-muted-foreground">{property ? `${propertyTitle(property)} · ${property.district}` : 'Объект не найден'}</p></div></div>
+        <p className="text-sm font-medium">Как прошёл показ?</p>
         {results.map((r) => (
           <button
             key={r}
@@ -690,8 +704,13 @@ function OutcomeSheet({ depth, showingId }: SheetProps<'outcome'>) {
             {r}
           </button>
         ))}
-        <Button size="lg" disabled={!result} onClick={save} className="mt-3">
-          Сохранить итог
+        {result && <div className="flex flex-col gap-4 rounded-[22px] border border-border p-4">
+          <label className="flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 size-5 shrink-0 accent-primary" checked={followUp} onChange={e => setFollowUp(e.target.checked)} /><span><span className="block text-sm font-medium">Запланировать следующий шаг</span><span className="mt-1 block text-xs text-muted-foreground">Задача появится в расписании. Сообщения не отправляются.</span></span></label>
+          {followUp && <><Field label="Что сделать"><TextInput aria-label="Следующий шаг после показа" value={title} onChange={e => setTaskTitle(e.target.value)} maxLength={200} /></Field><Field label="Когда"><ChoiceRow>{['Сегодня', 'Завтра', 'Через 2 дня'].map((label, i) => <Chip key={label} active={day === ['today', 'tomorrow', 'later'][i]} onClick={() => setDay(['today', 'tomorrow', 'later'][i])}>{label}</Chip>)}</ChoiceRow></Field><Field label="Время"><ChoiceRow>{SLOT_OPTS.map(t => <Chip key={t} active={slot === t} onClick={() => setSlot(t)}>{t}</Chip>)}</ChoiceRow></Field></>}
+          {result === 'Понравилось' && <label className="flex min-h-11 cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 size-5 shrink-0 accent-primary" checked={startDeal} onChange={e => setStartDeal(e.target.checked)} /><span><span className="block text-sm font-medium">Перейти к созданию сделки</span><span className="mt-1 block text-xs text-muted-foreground">После сохранения откроется форма. Сделка не создаётся автоматически.</span></span></label>}
+        </div>}
+        <Button size="lg" disabled={!canSave} onClick={save} className="mt-3">
+          {followUp && result ? 'Сохранить итог и задачу' : 'Сохранить итог'}
         </Button>
       </div>
     </SheetFrame>
