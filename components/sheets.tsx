@@ -304,7 +304,7 @@ function AddProperty({ depth, propertyId }: SheetProps<'addProperty'>) {
     const label = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', day: 'numeric', month: 'short', year: 'numeric' }).format(s.now)
     const updated: Property = {
       ...existing, id, op, kind, district: district ?? 'Не указан',
-      address: address.trim() || 'Адрес у��очняет��я', price: amount,
+      address: address.trim() || 'Адрес у����очняет��я', price: amount,
       area: area ? areaValue : undefined, rooms: rooms ?? undefined,
       freshness: existing?.freshness ?? 'new', checked: existing?.checked ?? 'не проверено',
       owner: owner.trim() || 'Не указан', docs: existing?.docs ?? [], draft, sourcePost,
@@ -846,48 +846,57 @@ function PaymentSheet({ depth, dealId }: SheetProps<'payment'>) {
   const s = useStore()
   const d = s.deals.find((x) => x.id === dealId)!
   const left = (Math.round(d.commission.amount * 100) - Math.round(d.commission.received * 100)) / 100
-  const [value, setValue] = useState(String(left))
+  const [value, setValue] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const client = s.clients.find(c => c.id === d.clientId)
+  const property = s.properties.find(p => p.id === d.propertyId)
+  const formatAmount = (amount: number) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
+  const changeValue = (next: string) => { setValue(next); setConfirming(false) }
   const cents = parsePayment(value)
   const n = cents === null ? 0 : cents / 100
-  const valid = cents !== null && cents <= Math.round(left * 100)
+  const valid = cents !== null && cents <= Math.round(left * 100) && !d.cancellation && !submitted
   const save = () => {
-    if (!valid || cents === null || d.cancellation) return
-    s.updateDeal(d.id, (x) => ({
-      ...x,
-      commission: { ...x.commission, ...applyPayment(x.commission.amount, x.commission.received, cents) },
-      history: [{ id: newId('e'), label: `Получено ${money(n)}`, when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...x.history],
-    }))
+  if (!valid || cents === null) return
+  if (!confirming) { setConfirming(true); return }
+  setSubmitted(true)
+  const eventId = newId('e')
+  s.updateDeal(d.id, (x) => {
+  if (x.cancellation || x.history.some(h => h.id === eventId) || cents > Math.round(x.commission.amount * 100) - Math.round(x.commission.received * 100)) return x
+  return {
+  ...x,
+  commission: { ...x.commission, ...applyPayment(x.commission.amount, x.commission.received, cents) },
+  history: [{ id: eventId, label: `Получено ${formatAmount(n)} · остаток ${formatAmount((Math.round(x.commission.amount * 100) - Math.round(x.commission.received * 100) - cents) / 100)}`, when: new Intl.DateTimeFormat('ru-RU', { timeZone: 'Asia/Tashkent', dateStyle: 'short', timeStyle: 'short' }).format(s.now) }, ...x.history],
+  }})
     s.closeSheet()
-    s.notify(`Оплата ${money(n)} отмечена`)
+    s.notify(`Получение ${formatAmount(n)} записано`)
   }
   return (
-    <SheetFrame title="Оплата комиссии" onClose={s.closeSheet} onConfirm={save} confirmDisabled={!valid} detent="auto" depth={depth}>
-      <div className="flex flex-col gap-4 px-4 pt-2">
-        <TextInput
+  <SheetFrame title={confirming ? 'Подтвердите получение' : 'Оплата комиссии'} onClose={() => confirming ? setConfirming(false) : s.closeSheet()} onConfirm={save} confirmLabel={confirming ? 'Записать' : 'Далее'} confirmDisabled={!valid} depth={depth}>
+  <div className="flex flex-col gap-4 px-4 pb-6 pt-2">
+  <div className="flex items-center gap-3 rounded-2xl bg-secondary p-4"><Avatar name={client?.name ?? '?'} size={44} /><div className="min-w-0"><p className="font-medium">{client?.name ?? 'Клиент'}</p><p className="mt-1 text-xs text-muted-foreground">{property ? `${propertyTitle(property)} · ${property.district}` : 'Сделка'}</p></div></div>
+  <dl className="flex flex-col gap-2 text-sm"><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Общая комиссия</dt><dd className="tabular-nums">{formatAmount(d.commission.amount)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Уже получено</dt><dd className="tabular-nums">{formatAmount(d.commission.received)}</dd></div><div className="flex justify-between gap-3 font-medium"><dt>Остаток</dt><dd className="tabular-nums">{formatAmount(left)}</dd></div></dl>
+  <p className="text-sm font-medium">{confirming ? 'Фактически полученная сумма' : 'Сколько получили сейчас, USD?'}</p>
+  <TextInput
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-          inputMode="decimal"
-          autoFocus
+  onChange={(e) => changeValue(e.target.value)}
+  readOnly={confirming}
+  placeholder="0,00"
+  inputMode="decimal"
           aria-label="Сумма в USD"
           aria-invalid={!valid}
           aria-describedby="payment-help"
           className="h-16 text-center text-[32px] font-bold tabular-nums"
         />
         <p id="payment-help" role={!valid ? 'alert' : undefined} className="text-center text-[13px] text-muted-foreground">{valid ? 'USD · запишите только фактически полученную сумму' : 'Введите сумму больше нуля, не выше остатка, максимум два знака после запятой'}</p>
-        <div className="flex justify-center gap-2">
-          <Chip active={n === left} onClick={() => setValue(String(left))}>
-            Весь остаток
-          </Chip>
-          <Chip active={n === Math.round(left / 2)} onClick={() => setValue(String(Math.round(left / 2)))}>
-            Половина
-          </Chip>
-        </div>
-        <p className="text-center text-[13px] text-muted-foreground tabular-nums">
-          Оста��ок {money(left)} · платит {d.commission.payer.toLowerCase()}
-        </p>
-        <Button size="lg" disabled={!n} onClick={save}>
-          Отметить получение
-        </Button>
+  {!confirming && <div className="flex justify-center gap-2">
+  <Chip active={n === left} onClick={() => changeValue(String(left))}>Весь остаток</Chip>
+  {left >= 0.02 && <Chip active={n === Math.floor(Math.round(left * 100) / 2) / 100} onClick={() => changeValue(String(Math.floor(Math.round(left * 100) / 2) / 100))}>Половина</Chip>}
+  </div>}
+  {valid && <div aria-live="polite" className="flex flex-col gap-2 rounded-2xl bg-secondary p-4"><p className="text-sm font-medium">После записи</p><div className="flex justify-between gap-3 text-sm"><span>Получено всего</span><span className="tabular-nums">{formatAmount((Math.round(d.commission.received * 100) + cents!) / 100)}</span></div><div className="flex justify-between gap-3 text-sm"><span>Останется</span><span className="font-semibold tabular-nums">{formatAmount((Math.round(left * 100) - cents!) / 100)}</span></div><p className="text-xs text-muted-foreground">{cents === Math.round(left * 100) ? 'Комиссия будет отмечена как полученная.' : 'Комиссия будет отмечена как частично полученная.'}</p></div>}
+  <p className="text-xs leading-relaxed text-muted-foreground">Платит: {d.commission.payer}. Запись касается общей комиссии, не только вашей доли. Деньги не списываются и не переводятся. Этап сделки не изменится.</p>
+  <Button size="lg" disabled={!valid} onClick={save}>{confirming ? `Записать ${formatAmount(n)}` : 'Проверить сумму'}</Button>
+  {confirming && <Button variant="secondary" onClick={() => setConfirming(false)}>Изменить сумму</Button>}
       </div>
     </SheetFrame>
   )

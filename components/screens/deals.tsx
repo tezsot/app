@@ -136,7 +136,8 @@ export function DealDetail({ id }: { id: string }) {
   if (!d) return null
   const c = s.clients.find((x) => x.id === d.clientId)!
   const p = s.properties.find((x) => x.id === d.propertyId)!
-  const left = d.commission.amount - d.commission.received
+  const left = (Math.round(d.commission.amount * 100) - Math.round(d.commission.received * 100)) / 100
+  const commissionMoney = (amount: number) => new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)
 
   const advance = () => {
     if (d.stage >= DEAL_STAGES.length - 1 || !editingStage || (d.stage < DEAL_STAGES.length - 2 && !nextStep.trim())) return
@@ -221,8 +222,8 @@ export function DealDetail({ id }: { id: string }) {
           </div>
           <Progress value={(d.commission.received / d.commission.amount) * 100} className="mt-3" />
           <p className="mt-2 text-[13px] text-muted-foreground tabular-nums">
-            Получено {money(d.commission.received)}
-            {left > 0 && ` · осталось ${money(left)}`}
+            Получено {commissionMoney(d.commission.received)}
+            {left > 0 && ` · осталось ${commissionMoney(left)}`}
           </p>
         </div>
         <Row title="Кто платит" value={d.commission.payer} />
