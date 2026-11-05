@@ -3,6 +3,7 @@
 import { clientNext } from '@/lib/client-next'
 import { useState } from 'react'
 import { HomeWorkflowLinks } from '@/components/home-workflow-links'
+import { DailyAgenda, PropertyRecheckQueue } from '@/components/daily-agenda'
 
 import {
   Building2,
@@ -208,87 +209,8 @@ export function HomeScreen() {
         ))}
       </section>
 
-      <Group
-        header="План на день"
-        action={
-          <button type="button" onClick={() => s.push({ name: 'tasks' })} className="text-[15px] font-medium">
-            Все задачи
-          </button>
-        }
-      >
-        {today.map((item) =>
-          item.kind === 'task' ? (
-            <div key={item.task.id} className="group/row flex min-h-[56px] items-center gap-3 pl-4">
-              <button
-                type="button"
-                aria-label={item.task.done ? 'Выполнено' : `Выполнить: ${item.task.title}`}
-                onClick={() => !item.task.done && s.completeTask(item.task.id)}
-                className="-m-2 flex size-11 shrink-0 items-center justify-center"
-              >
-                {item.task.done ? (
-                  <CircleCheck className="anim-pop size-[26px] fill-primary text-primary-foreground" strokeWidth={2} />
-                ) : (
-                  <Circle className="size-[26px] text-muted-foreground/50" strokeWidth={1.75} />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  item.task.clientId
-                    ? s.push({ name: 'client', id: item.task.clientId })
-                    : item.task.propertyId && s.push({ name: 'property', id: item.task.propertyId })
-                }
-                className="flex min-w-0 flex-1 items-center gap-3 self-stretch border-b border-separator py-2.5 pr-4 text-left group-last/row:border-b-0"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className={cn('block truncate text-[16px]', item.task.done && 'text-muted-foreground line-through')}>
-                    {item.task.title}
-                  </span>
-                  <span className="block truncate text-[13px] text-muted-foreground">
-                    {client(item.task.clientId)?.name ??
-                      (item.task.propertyId ? propertyTitle(property(item.task.propertyId)!) : '')}
-                  </span>
-                </span>
-                <span className="text-[15px] text-muted-foreground tabular-nums">{item.time}</span>
-              </button>
-            </div>
-          ) : (
-            <Row
-              key={item.showing.id}
-              icon={CalendarClock}
-              tone={item.showing.status === 'done' ? 'neutral' : 'dark'}
-              title={`Показ · ${client(item.showing.clientId)?.name.split(' ')[0]}`}
-              subtitle={
-                <span className="flex items-center gap-1.5">
-                  <Badge
-                    kind={
-                      item.showing.status === 'confirmed' ? 'success' : item.showing.status === 'pending' ? 'warning' : 'neutral'
-                    }
-                  >
-                    {SHOWING_LABEL[item.showing.status]}
-                  </Badge>
-                  <span className="truncate">{propertyTitle(property(item.showing.propertyId)!)}</span>
-                </span>
-              }
-              value={item.time}
-              onClick={() => s.push({ name: 'showings' })}
-              chevron={false}
-            />
-          ),
-        )}
-      </Group>
-
-      {recheck > 0 && (
-        <Group>
-          <Row
-            icon={RefreshCw}
-            tone="warning"
-            title={`${recheck} объекта ждут проверки`}
-            subtitle="Подтвердите цену и статус у собственника"
-            onClick={() => s.setTab('properties')}
-          />
-        </Group>
-      )}
+      <DailyAgenda />
+      <PropertyRecheckQueue />
 
       <HomeWorkflowLinks />
       <Group header="Легализация">
