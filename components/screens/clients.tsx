@@ -343,7 +343,7 @@ export function ClientDetail({ id }: { id: string }) {
         )}
       </Group>
 
-      <ClientSelection key={c.id} properties={matches.map(({ p }) => p)} />
+      <ClientSelection key={c.id} client={c} properties={matches.map(({ p }) => p)} />
 
       {(showings.length > 0 || deals.length > 0) && (
         <Group header="Показы и сделки">
